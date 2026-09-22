@@ -1,0 +1,207 @@
+/* ==========================================================================
+   tokens.css  -  J&J Flooring World design system
+   Design tokens, reset and typography. This is the single source of truth for
+   colour, elevation, geometry and type. Nothing in the app should hard-code a
+   hex value; every surface reads a token from here.
+
+   BRAND SOURCE: the palette is sampled from the live marketing site
+   (jjflooringworld.com), not invented. The site ships its design tokens as
+   OKLCH custom properties; the hex values here are those tokens converted
+   to sRGB.
+
+     --primary         oklch(22%   .071 251)  = #001B3A  navy
+     --brand-blue      oklch(57%   .22  255)  = #0071F4  primary accent
+     --brand-bright    oklch(66%   .2   252)  = #0093FF  hover / highlight
+     --accent          oklch(92%   .045 78)   = #F6E2C4  warm cream
+     --brand-gold-soft oklch(91%   .055 78)   = #F6DEB9  soft gold
+     --wood            oklch(70%   .11  69)   = #CB914D  oak / gold accent
+     --foreground      oklch(21%   .05  251)  = #05192E  ink
+
+   SURFACE STRATEGY: the workspace leans on GoHighLevel's own neutral greys
+   and white cards so the tool looks native inside the GHL frame. Brand blue
+   is reserved for actions and active state, and it is applied as a soft
+   tint rather than a filled block.
+
+   TYPOGRAPHY: Manrope for UI, Libre Baskerville for the sign-in brand
+   moment and Caveat for the e-signature only. All three are loaded with
+   next/font and exposed as CSS variables, so the family names are never
+   hard-coded here.
+   ========================================================================== */
+
+:root {
+  /* --- Brand core (extracted) --- */
+  --navy-950:    #00122A;
+  --navy-900:    #001B3A;
+  --navy-800:    #062647;
+  --navy-700:    #0B3260;
+
+  --blue-700:    #0059C8;
+  --blue:        #0071F4;
+  --blue-400:    #2490FF;
+  --blue-bright: #0093FF;
+  --blue-soft:   #E8F1FE;
+  --blue-tint:   #F4F8FF;
+
+  --gold:        #CB914D;
+  --gold-deep:   #A9752A;
+  --gold-soft:   #FBF1E0;
+  --cream:       #F6E2C4;
+
+  /* --- Surfaces (GHL-leaning neutral) --- */
+  --paper:       #F4F5F7;   /* app canvas */
+  --panel:       #FFFFFF;   /* cards, top bar, tab strip */
+  --panel-sunk:  #F6F7F9;   /* wells, table headers, inputs */
+  --panel-2:     #F1F3F6;
+  --rule:        #E5E8EE;   /* hairlines */
+  --rule-strong: #D5DBE4;
+
+  /* --- Navigation (GHL tab bar) --- */
+  --tab-ink:      #46536B;   /* idle tab label */
+  --tab-ink-on:   #0059C8;   /* active tab label */
+  --tab-tint:     #E8F1FE;   /* active tab fill, the soft blue */
+  --tab-hover:    #F3F5F8;
+  --tab-divider:  #E5E8EE;
+
+  /* --- Ink --- */
+  --ink:         #05192E;
+  --ink-2:       #46536B;
+  --ink-3:       #7A8698;
+  --ink-inv:     #F2F6FC;
+
+  /* --- Semantic --- */
+  --moss:        #0E9F5E;
+  --moss-soft:   #DCF5E6;
+  --clay:        #C0272D;
+  --clay-soft:   #FBE4E6;
+  --brass:       #A9752A;
+  --brass-soft:  #FBF1E0;
+  --slate:       #46536B;
+  --slate-soft:  #E8ECF2;
+
+  /* --- Elevation --- */
+  --lift-1: 0 1px 2px rgba(16,32,56,.05), 0 1px 1px rgba(16,32,56,.03);
+  --lift-2: 0 2px 6px rgba(16,32,56,.07), 0 10px 24px -12px rgba(16,32,56,.18);
+  --lift-3: 0 24px 60px -16px rgba(2,14,32,.4);
+  --lift-pop: 0 16px 40px -16px rgba(2,14,32,.3);
+
+  /* --- Geometry --- */
+  --r-sm: 6px;
+  --r-md: 9px;
+  --r-lg: 13px;
+  --r-pill: 999px;
+
+  /* --- Type --- */
+  --body: var(--font-manrope), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --display: var(--body);   /* app headings read as product UI, like GHL */
+  --serif: var(--font-libre), 'Iowan Old Style', Georgia, serif;
+  --script: var(--font-caveat), 'Segoe Script', cursive;
+  --mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+
+  /* --- Layout --- */
+  --header-h: 58px;
+  --nav-h: 64px;
+  --wrap: 1440px;
+  --gap: 16px;
+}
+
+/* Dark mode. Light is the priority; this is a considered fallback so a
+   late-night user is not blinded, not an inverted copy. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper:       #0E1421;
+    --panel:       #151D2C;
+    --panel-sunk:  #1B2434;
+    --panel-2:     #18202F;
+    --rule:        #273147;
+    --rule-strong: #37435C;
+
+    --tab-ink:      #B8C6D8;
+    --tab-ink-on:   #7FB4FF;
+    --tab-tint:     #16294A;
+    --tab-hover:    #1E2839;
+    --tab-divider:  #273147;
+
+    --ink:         #EAF1FA;
+    --ink-2:       #B8C6D8;
+    --ink-3:       #8598B0;
+
+    --blue-soft:   #16294A;
+    --blue-tint:   #141F31;
+    --gold:        #E0B276;
+    --gold-soft:   #2A2418;
+
+    --moss:        #57C98D;  --moss-soft:  #16301F;
+    --clay:        #F08A88;  --clay-soft:  #38201F;
+    --brass:       #E0BA62;  --brass-soft: #33290F;
+    --slate:       #9EB7CC;  --slate-soft: #1E2830;
+
+    --lift-1: 0 1px 2px rgba(0,0,0,.4);
+    --lift-2: 0 2px 6px rgba(0,0,0,.4), 0 10px 24px -12px rgba(0,0,0,.55);
+    --lift-3: 0 24px 60px -16px rgba(0,0,0,.75);
+    --lift-pop: 0 16px 40px -16px rgba(0,0,0,.65);
+  }
+}
+
+/* --- Reset --- */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--body);
+  font-size: 14.5px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+}
+
+img, svg { max-width: 100%; display: block; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+a { color: var(--blue); text-decoration-color: color-mix(in srgb, var(--blue) 35%, transparent); text-underline-offset: 2px; }
+a:hover { text-decoration-color: currentColor; }
+
+:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+/* --- Typography scale --- */
+h1, h2, h3, h4 { font-family: var(--display); font-weight: 700; margin: 0; line-height: 1.25; letter-spacing: -0.015em; }
+h1 { font-size: 27px; }
+h2 { font-size: 20px; }
+h3 { font-size: 16px; }
+h4 { font-size: 14.5px; font-family: var(--body); font-weight: 700; letter-spacing: 0; }
+p  { margin: 0 0 10px; }
+
+.t-meta  { font-size: 12.5px; color: var(--ink-3); }
+.t-sub   { font-size: 13.5px; color: var(--ink-2); }
+.t-num   { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+.t-mono  { font-family: var(--mono); font-size: 12.5px; }
+.t-eyebrow {
+  font-size: 11px; font-weight: 800; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+
+/* Utility */
+.stack > * + * { margin-top: 12px; }
+.row { display: flex; align-items: center; gap: 10px; }
+.row-wrap { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.spread { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.grow { flex: 1 1 auto; min-width: 0; }
+.hidden { display: none !important; }
+.truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+.mt-0 { margin-top: 0 !important; }
+.center { text-align: center; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}

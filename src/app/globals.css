@@ -1,26 +1,64 @@
+/* ==========================================================================
+   globals.css  -  Tailwind entry point and central theme configuration
+   --------------------------------------------------------------------------
+   This file is deliberately thin. It does two things:
+
+     1. loads Tailwind v4,
+     2. maps the J&J Flooring World design tokens onto Tailwind's theme so a
+        utility class (bg-panel, text-ink-2, font-script, rounded-lg) resolves
+        to exactly the same value the hand-written component CSS uses.
+
+   The real design system lives in src/styles/:
+     tokens.css      colour, elevation, geometry, type scale, reset
+     components.css  buttons, cards, pills, tables, kanban, modal, toast
+     layout.css      app shell, top bar, tab strip, sign-in, installer nav
+
+   Those three files are imported after this one in src/app/layout.tsx, so the
+   design system always wins over Tailwind's preflight. Nothing in the app
+   hard-codes a colour: every value comes from a token.
+   ========================================================================== */
+
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  /* --- Surfaces --- */
+  --color-paper: var(--paper);
+  --color-panel: var(--panel);
+  --color-panel-sunk: var(--panel-sunk);
+  --color-panel-2: var(--panel-2);
+  --color-rule: var(--rule);
+  --color-rule-strong: var(--rule-strong);
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+  /* --- Ink --- */
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  /* --- Brand --- */
+  --color-navy: var(--navy-900);
+  --color-brand: var(--blue);
+  --color-brand-700: var(--blue-700);
+  --color-brand-soft: var(--blue-soft);
+  --color-brand-tint: var(--blue-tint);
+  --color-gold: var(--gold);
+  --color-gold-deep: var(--gold-deep);
+  --color-gold-soft: var(--gold-soft);
+  --color-cream: var(--cream);
+
+  /* --- Semantic --- */
+  --color-moss: var(--moss);
+  --color-clay: var(--clay);
+  --color-brass: var(--brass);
+  --color-slate: var(--slate);
+
+  /* --- Type: the next/font variables, never a hard-coded family --- */
+  --font-sans: var(--body);
+  --font-serif: var(--serif);
+  --font-script: var(--script);
+  --font-mono: var(--mono);
+
+  /* --- Geometry --- */
+  --radius-sm: var(--r-sm);
+  --radius-md: var(--r-md);
+  --radius-lg: var(--r-lg);
 }

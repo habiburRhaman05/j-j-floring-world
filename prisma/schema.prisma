@@ -1,0 +1,1796 @@
+// =============================================================================
+// J&J Flooring World - Prisma schema
+// PostgreSQL 15+ · Prisma 5+
+//
+// Conventions used throughout:
+//  · Money: Decimal(14,4) for per-unit rates (a floor price of $2.185/SF is
+//    real), Decimal(14,2) for totals. Never Float.
+//  · Margin is NEVER a column. It is derived from snapshotted cost and price.
+//  · Records with financial or legal consequence are never hard-deleted.
+//    Catalogue and people records carry deletedAt; money records do not and
+//    are voided instead.
+//  · Every entity mirrored from GoHighLevel carries a nullable, unique
+//    ghl*Id column plus a SyncState row. Field write-ownership is declared in
+//    SyncFieldPolicy - see docs/05-ghl-sync-architecture.md.
+//  · Single tenant by decision D1. No companyId anywhere. If multi-tenancy is
+//    ever needed, add companyId + a Prisma extension that scopes every query.
+// =============================================================================
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextSearchPostgres"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================================================
+// ENUMS
+// =============================================================================
+
+enum UserStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+  DISABLED
+}
+
+enum PermissionEffect {
+  ALLOW
+  DENY
+}
+
+enum LeadStage {
+  NEW
+  CONTACTED
+  QUALIFIED
+  APPOINTMENT_SET
+  ESTIMATE_SENT
+  FOLLOW_UP
+  WON
+  LOST
+}
+
+enum LeadSource {
+  FACEBOOK_ADS
+  GOOGLE_ADS
+  WEBSITE_FORM
+  ORGANIC_SEARCH
+  REFERRAL
+  WALK_IN
+  INBOUND_CALL
+  REPEAT_CUSTOMER
+  OTHER
+}
+
+enum LeadLostReason {
+  PRICE
+  TIMELINE
+  WENT_ELSEWHERE
+  NO_RESPONSE
+  NOT_QUALIFIED
+  DUPLICATE
+  SPAM
+  OTHER
+}
+
+enum AssignmentStrategy {
+  CSR_MANUAL // primary path, decision D5
+  ADMIN_OVERRIDE
+  AUTO_ROUND_ROBIN
+  AUTO_TERRITORY
+  AUTO_LOAD_BALANCED
+  AUTO_SOURCE_RULE
+  SLA_FALLBACK // auto fired because the CSR SLA expired
+}
+
+enum ActivityType {
+  CALL_OUTBOUND
+  CALL_INBOUND
+  SMS
+  EMAIL
+  SITE_VISIT
+  NOTE
+  STAGE_CHANGE
+  ASSIGNMENT
+  SYSTEM
+}
+
+enum ActivityOutcome {
+  ANSWERED
+  VOICEMAIL
+  NO_ANSWER
+  WRONG_NUMBER
+  NOT_INTERESTED
+  CALLBACK_REQUESTED
+  COMPLETED
+  NOT_APPLICABLE
+}
+
+enum AppointmentType {
+  MEASURE
+  CONSULTATION
+  FOLLOW_UP
+  INSTALL_WALKTHROUGH
+  WARRANTY_VISIT
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  CONFIRMED
+  SHOWED
+  NO_SHOW
+  CANCELLED
+  RESCHEDULED
+}
+
+enum UnitOfMeasure {
+  SF // square foot
+  SY // square yard
+  LF // linear foot
+  EA // each
+  HR // hour
+  GAL
+  BOX
+}
+
+enum TierLevel {
+  GOOD
+  BETTER
+  BEST
+}
+
+enum EstimateStatus {
+  DRAFT
+  SENT
+  VIEWED
+  SIGNED
+  DECLINED
+  EXPIRED
+  SUPERSEDED
+  VOID
+}
+
+enum DocumentStatus {
+  NOT_CREATED
+  DRAFT
+  SENT
+  VIEWED
+  SIGNED
+  DECLINED
+  VOIDED
+}
+
+enum JobStage {
+  DEPOSIT_PAID
+  MATERIALS_ORDERED
+  READY_TO_SCHEDULE
+  SCHEDULED
+  EN_ROUTE
+  IN_PROGRESS
+  COMPLETED
+  CLOSED
+  CANCELLED
+}
+
+enum JobPhotoType {
+  BEFORE
+  PROGRESS
+  COMPLETION
+  ISSUE
+  MATERIAL_DELIVERY
+}
+
+enum JobIssueSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  BLOCKING
+}
+
+enum JobIssueStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+  WONT_FIX
+}
+
+enum MaterialOrderStatus {
+  NOT_ORDERED
+  ORDERED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  BACKORDERED
+  CANCELLED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  VIEWED
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+  VOID
+}
+
+enum PaymentMethod {
+  CARD
+  ACH
+  CASH
+  CHECK
+  FINANCING
+  OTHER
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+enum CommissionBasis {
+  CONTRACT_REVENUE
+  GROSS_MARGIN
+}
+
+enum CommissionRuleType {
+  FLAT_PERCENT
+  TIERED_BY_MARGIN
+  FLAT_AMOUNT
+}
+
+enum CommissionStatus {
+  ACCRUED // estimate signed
+  EARNED // invoice paid in full AND job confirmed complete
+  APPROVED // admin approved for payout
+  PAID
+  CLAWED_BACK
+  VOID
+}
+
+enum PayoutStatus {
+  DRAFT
+  APPROVED
+  PAID
+  CANCELLED
+}
+
+enum SyncOwner {
+  APP
+  GHL
+}
+
+enum SyncDirection {
+  PUSH // app writes to GHL
+  PULL // GHL writes to app
+  BIDIRECTIONAL // different fields flow each way
+  NONE
+}
+
+enum OutboxStatus {
+  PENDING
+  IN_FLIGHT
+  SUCCEEDED
+  FAILED
+  DEAD
+}
+
+enum WebhookStatus {
+  RECEIVED
+  PROCESSING
+  PROCESSED
+  FAILED
+  IGNORED
+  DUPLICATE
+}
+
+enum SyncEntity {
+  LEAD
+  APPOINTMENT
+  ESTIMATE_DOCUMENT
+  INVOICE
+  PAYMENT
+  OPPORTUNITY
+  USER
+  NOTE
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  SMS
+  PUSH
+}
+
+// =============================================================================
+// IDENTITY AND ACCESS
+// =============================================================================
+
+/// Base user. Holds only what every human in the system has. Role-specific
+/// attributes hang off UserProfile or the role tables, never off here.
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  emailVerifiedAt DateTime?
+  passwordHash String? // null while INVITED
+  firstName    String
+  lastName     String
+  phone        String?
+  avatarFileId String?
+  status       UserStatus @default(INVITED)
+  timezone     String     @default("America/New_York")
+  mustChangePassword Boolean @default(false)
+
+  // Two-factor. Mandatory for anyone holding the Admin role (FR-SYS-09).
+  totpSecret        String? // encrypted at rest
+  totpEnabledAt     DateTime?
+  backupCodes       Json? // hashed
+
+  // Capacity inputs for AUTO_LOAD_BALANCED assignment (FR-ADM-27)
+  maxOpenLeads   Int?
+  workingHours   Json? // { mon: ["08:00","17:00"], ... }
+
+  lastLoginAt  DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  deletedAt    DateTime?
+
+  // GHL user mirror, so appointments can land on the right GHL calendar
+  ghlUserId     String? @unique
+  ghlCalendarId String?
+
+  roles                UserRole[]
+  permissionOverrides  UserPermissionOverride[]
+  sessions             Session[]
+  accounts             Account[]
+  passwordResets       PasswordResetToken[]
+
+  avatar               FileAsset? @relation("UserAvatar", fields: [avatarFileId], references: [id])
+
+  assignedLeads        Lead[]                  @relation("LeadAssignedRep")
+  assignmentsReceived  LeadAssignment[]        @relation("AssignmentAssignee")
+  assignmentsMade      LeadAssignment[]        @relation("AssignmentActor")
+  leadNotes            LeadNote[]
+  activities           LeadActivity[]
+  appointmentsOwned    Appointment[]           @relation("AppointmentOwner")
+  appointmentsBooked   Appointment[]           @relation("AppointmentBooker")
+  estimates            Estimate[]              @relation("EstimateRep")
+  installerJobs        Job[]                   @relation("JobInstaller")
+  jobStageChanges      JobStageHistory[]
+  jobPhotos            JobPhoto[]
+  jobIssuesReported    JobIssue[]              @relation("IssueReporter")
+  jobIssuesResolved    JobIssue[]              @relation("IssueResolver")
+  commissionLedger     CommissionLedger[]
+  commissionRules      CommissionRule[]
+  payoutsCreated       Payout[]                @relation("PayoutCreator")
+  payoutsApproved      Payout[]                @relation("PayoutApprover")
+  payoutLines          PayoutLine[]
+  auditLogs            AuditLog[]
+  invitationsSent      UserInvitation[]        @relation("InvitationSender")
+  crewMemberships      CrewMember[]
+  crewsLed             Crew[]                  @relation("CrewLead")
+  notifications        Notification[]
+  notificationPrefs    NotificationPreference[]
+  priceChanges         ProductPriceHistory[]
+  uploadedFiles        FileAsset[]             @relation("FileUploader")
+  paymentsRecorded     Payment[]               @relation("PaymentRecorder")
+
+  @@index([status])
+  @@index([deletedAt])
+  @@map("users")
+}
+
+/// A role is a named bundle of permissions. System roles cannot be deleted.
+/// Admins may create custom roles (FR-ADM-22) without a code change.
+model Role {
+  id          String  @id @default(cuid())
+  key         String  @unique // "admin", "sales_rep", "csr", "installer", or custom
+  name        String
+  description String?
+  isSystem    Boolean @default(false)
+  /// Data scope this role sees by default: "all" | "team" | "own"
+  defaultScope String @default("own")
+  sortOrder   Int     @default(100)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  permissions RolePermission[]
+  users       UserRole[]
+  invitations UserInvitation[]
+  commissionRules CommissionRule[]
+
+  @@map("roles")
+}
+
+/// The permission registry. Seeded, extended by migration when a new
+/// capability is added. Keys are dot-namespaced: "<resource>.<action>[.<scope>]"
+/// e.g. product.cost.read, lead.read.own, estimate.approve.discount
+model Permission {
+  id          String  @id @default(cuid())
+  key         String  @unique
+  resource    String // "product", "lead", "estimate"
+  action      String // "read", "create", "update", "delete", "approve"
+  scope       String? // "own", "team", "all", or a field name for field-level keys
+  description String
+  /// Field-level permissions gate individual response fields rather than routes.
+  isFieldLevel Boolean @default(false)
+  /// Grouping for the permission matrix UI
+  category    String
+
+  createdAt DateTime @default(now())
+
+  roles     RolePermission[]
+  overrides UserPermissionOverride[]
+
+  @@index([resource, action])
+  @@index([category])
+  @@map("permissions")
+}
+
+model RolePermission {
+  id           String @id @default(cuid())
+  roleId       String
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([roleId, permissionId])
+  @@index([roleId])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  id     String @id @default(cuid())
+  userId String
+  roleId String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  grantedAt DateTime @default(now())
+  grantedBy String?
+
+  @@unique([userId, roleId])
+  @@index([userId])
+  @@map("user_roles")
+}
+
+/// THE PERMISSION VAULT.
+/// Per-user grants and denials layered on top of role permissions.
+/// Resolution order: role ALLOWs, then vault ALLOWs added, then vault DENYs
+/// removed. DENY always wins. Expired rows are ignored.
+model UserPermissionOverride {
+  id           String           @id @default(cuid())
+  userId       String
+  permissionId String
+  effect       PermissionEffect
+  /// Optional narrowing, e.g. {"maxDiscountPercent": 15} on estimate.approve.discount
+  constraints  Json?
+  reason       String
+  grantedById  String
+  expiresAt    DateTime?
+
+  createdAt DateTime  @default(now())
+  revokedAt DateTime?
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, permissionId, effect])
+  @@index([userId, expiresAt])
+  @@map("user_permission_overrides")
+}
+
+model UserInvitation {
+  id           String    @id @default(cuid())
+  email        String
+  tokenHash    String    @unique
+  roleId       String
+  invitedById  String
+  expiresAt    DateTime
+  acceptedAt   DateTime?
+  revokedAt    DateTime?
+  createdAt    DateTime  @default(now())
+
+  role      Role @relation(fields: [roleId], references: [id])
+  invitedBy User @relation("InvitationSender", fields: [invitedById], references: [id])
+
+  @@index([email])
+  @@map("user_invitations")
+}
+
+/// Auth.js database session. Database sessions rather than JWT, so that
+/// suspending a user (FR-ADM-21) kills their access immediately.
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  /// Which role the user is currently acting as, when they hold several
+  activeRoleId String?
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("password_reset_tokens")
+}
+
+/// Installer crews (FR-ADM-26). A job may be assigned to an individual or a crew.
+model Crew {
+  id        String    @id @default(cuid())
+  name      String
+  leadId    String? // crew lead user
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  crewLead User?        @relation("CrewLead", fields: [leadId], references: [id])
+  members  CrewMember[]
+  jobs     Job[]
+
+  @@map("crews")
+}
+
+model CrewMember {
+  id     String @id @default(cuid())
+  crewId String
+  userId String
+
+  crew Crew @relation(fields: [crewId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  joinedAt DateTime @default(now())
+
+  @@unique([crewId, userId])
+  @@map("crew_members")
+}
+
+/// Immutable audit trail (FR-SYS-03). Append only. Never updated or deleted.
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  action    String // "estimate.sign", "product.update", "user.suspend"
+  entity    String // model name
+  entityId  String
+  before    Json?
+  after     Json?
+  ipAddress String?
+  userAgent String?
+  /// Set when the change originated from a GHL webhook rather than a human
+  syncSource String?
+  createdAt DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id])
+
+  @@index([entity, entityId])
+  @@index([actorId, createdAt])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// =============================================================================
+// CRM - LEADS, ASSIGNMENT, ACTIVITY, APPOINTMENTS
+// =============================================================================
+
+/// A prospective customer. Mirrors a GHL Contact.
+/// GHL owns identity fields (name, phone, email, tags, source).
+/// The app owns stage, assignment, internal notes and everything downstream.
+model Lead {
+  id String @id @default(cuid())
+
+  // --- GHL-owned identity (pull only) ---
+  ghlContactId String? @unique
+  firstName    String
+  lastName     String
+  email        String?
+  phone        String?
+  addressLine1 String?
+  addressLine2 String?
+  city         String?
+  state        String?
+  postalCode   String?
+  country      String  @default("US")
+  ghlTags      String[] @default([])
+
+  // --- App-owned ---
+  stage          LeadStage       @default(NEW)
+  source         LeadSource      @default(OTHER)
+  sourceDetail   String? // campaign name, referrer name
+  assignedRepId  String?
+  assignedAt     DateTime?
+  qualifiedAt    DateTime?
+  lostReason     LeadLostReason?
+  lostNote       String?
+  estimatedValue Decimal?        @db.Decimal(14, 2)
+  /// Free-form scope captured at intake: "kitchen + hallway, approx 480 SF"
+  scopeSummary   String?
+  /// Set when the SLA timer for CSR assignment started
+  slaStartedAt   DateTime?
+  slaBreachedAt  DateTime?
+
+  // --- Opportunity mirror (GHL pipeline record) ---
+  ghlOpportunityId String? @unique
+  ghlPipelineId    String?
+  ghlStageId       String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  assignedRep  User?             @relation("LeadAssignedRep", fields: [assignedRepId], references: [id])
+  assignments  LeadAssignment[]
+  notes        LeadNote[]
+  activities   LeadActivity[]
+  appointments Appointment[]
+  estimates    Estimate[]
+  jobs         Job[]
+  invoices     Invoice[]
+
+  @@index([stage])
+  @@index([assignedRepId, stage])
+  @@index([postalCode])
+  @@index([createdAt])
+  @@index([slaStartedAt])
+  @@map("leads")
+}
+
+/// Full assignment history. The current assignment is the row with the
+/// latest assignedAt and no unassignedAt. Lead.assignedRepId is a denormalised
+/// convenience column kept in sync inside the same transaction.
+model LeadAssignment {
+  id           String             @id @default(cuid())
+  leadId       String
+  assignedToId String
+  assignedById String? // null when the system assigned automatically
+  strategy     AssignmentStrategy
+  reason       String?
+  /// Snapshot of why the auto-strategy picked this rep, for debuggability
+  strategyContext Json?
+  assignedAt   DateTime           @default(now())
+  unassignedAt DateTime?
+
+  lead       Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  assignedTo User  @relation("AssignmentAssignee", fields: [assignedToId], references: [id])
+  assignedBy User? @relation("AssignmentActor", fields: [assignedById], references: [id])
+
+  @@index([leadId, assignedAt])
+  @@index([assignedToId])
+  @@map("lead_assignments")
+}
+
+/// Rules driving the automatic fallback strategy (doc 06).
+/// Evaluated in priority order; first match wins.
+model AssignmentRule {
+  id          String             @id @default(cuid())
+  name        String
+  priority    Int // lower runs first
+  active      Boolean            @default(true)
+  strategy    AssignmentStrategy
+  /// Match criteria, all must match:
+  /// { "sources": ["FACEBOOK_ADS"], "postalCodes": ["28202","28203"],
+  ///   "estimatedValueMin": 5000, "businessHoursOnly": true }
+  criteria    Json
+  /// For AUTO_TERRITORY / explicit targeting
+  targetUserIds String[] @default([])
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@index([active, priority])
+  @@map("assignment_rules")
+}
+
+/// Zip-code territories for AUTO_TERRITORY.
+model Territory {
+  id          String   @id @default(cuid())
+  name        String
+  postalCodes String[]
+  userIds     String[] // reps covering this territory
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@map("territories")
+}
+
+model LeadNote {
+  id        String   @id @default(cuid())
+  leadId    String
+  authorId  String
+  body      String
+  /// Internal notes are never pushed to GHL; customer-visible ones are
+  isInternal Boolean @default(false)
+  ghlNoteId String?  @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lead   Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  author User @relation(fields: [authorId], references: [id])
+
+  @@index([leadId, createdAt])
+  @@map("lead_notes")
+}
+
+/// Structured activity log: calls, texts, visits, stage changes.
+/// Distinct from LeadNote, which is free text.
+model LeadActivity {
+  id          String           @id @default(cuid())
+  leadId      String
+  actorId     String?
+  type        ActivityType
+  outcome     ActivityOutcome?
+  subject     String?
+  body        String?
+  durationSec Int?
+  /// For activities mirrored from a GHL conversation
+  ghlMessageId String? @unique
+  occurredAt  DateTime         @default(now())
+  createdAt   DateTime         @default(now())
+
+  lead  Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  actor User? @relation(fields: [actorId], references: [id])
+
+  @@index([leadId, occurredAt])
+  @@index([type])
+  @@map("lead_activities")
+}
+
+/// Mirrors a GHL calendar event. GHL owns the time slot and status;
+/// the app owns appointmentType and the link to a lead and job.
+model Appointment {
+  id     String @id @default(cuid())
+  leadId String
+
+  ghlAppointmentId String? @unique
+  ghlCalendarId    String?
+
+  type       AppointmentType   @default(MEASURE)
+  status     AppointmentStatus @default(SCHEDULED)
+  title      String?
+  startAt    DateTime
+  endAt      DateTime
+  timezone   String            @default("America/New_York")
+  location   String?
+  notes      String?
+  /// The rep or installer whose calendar this belongs to
+  ownerId    String?
+  bookedById String? // CSR who booked it, null if booked by the customer
+  /// Set when this appointment was created by the customer via a GHL booking link
+  selfBooked Boolean           @default(false)
+
+  cancelledAt    DateTime?
+  cancelReason   String?
+  rescheduledFromId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lead     Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  owner    User? @relation("AppointmentOwner", fields: [ownerId], references: [id])
+  bookedBy User? @relation("AppointmentBooker", fields: [bookedById], references: [id])
+
+  @@index([ownerId, startAt])
+  @@index([leadId])
+  @@index([startAt])
+  @@map("appointments")
+}
+
+// =============================================================================
+// CATALOGUE - PRODUCTS AND PRICING
+// =============================================================================
+
+/// Categories are a table, not an enum, so Admin can add one without a deploy.
+model ProductCategory {
+  id        String    @id @default(cuid())
+  key       String    @unique
+  name      String
+  sortOrder Int       @default(100)
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+
+  products Product[]
+
+  @@map("product_categories")
+}
+
+model Supplier {
+  id          String    @id @default(cuid())
+  name        String
+  contactName String?
+  phone       String?
+  email       String?
+  leadTimeDays Int?
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  deletedAt   DateTime?
+
+  products Product[]
+
+  @@map("suppliers")
+}
+
+model Product {
+  id         String        @id @default(cuid())
+  sku        String?       @unique
+  name       String
+  description String?
+  categoryId String
+  supplierId String?
+  unit       UnitOfMeasure
+
+  /// Cost is gated by the product.cost.read permission at the API layer.
+  costPerUnit  Decimal @db.Decimal(14, 4)
+  pricePerUnit Decimal @db.Decimal(14, 4)
+
+  /// Optional hint used to pre-fill Good/Better/Best when building an estimate
+  tierAffinity TierLevel?
+  /// Waste factor applied when quantity is derived from a measured area, e.g. 0.10
+  wasteFactor  Decimal?   @db.Decimal(5, 4)
+  taxable      Boolean    @default(true)
+  active       Boolean    @default(true)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  category      ProductCategory       @relation(fields: [categoryId], references: [id])
+  supplier      Supplier?             @relation(fields: [supplierId], references: [id])
+  priceHistory  ProductPriceHistory[]
+  estimateLines EstimateLineItem[]
+  invoiceLines  InvoiceLineItem[]
+  materialLines MaterialOrderLine[]
+
+  @@index([categoryId, active])
+  @@index([active])
+  @@map("products")
+}
+
+/// Append-only price change log (FR-ADM-14). Never updated.
+model ProductPriceHistory {
+  id        String   @id @default(cuid())
+  productId String
+  actorId   String?
+  oldCost   Decimal  @db.Decimal(14, 4)
+  newCost   Decimal  @db.Decimal(14, 4)
+  oldPrice  Decimal  @db.Decimal(14, 4)
+  newPrice  Decimal  @db.Decimal(14, 4)
+  note      String?
+  createdAt DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  actor   User?   @relation(fields: [actorId], references: [id])
+
+  @@index([productId, createdAt])
+  @@map("product_price_history")
+}
+
+// =============================================================================
+// QUOTING - ESTIMATES, TIERS, LINE ITEMS, GHL DOCUMENT
+// =============================================================================
+
+model Estimate {
+  id     String @id @default(cuid())
+  number String @unique // human-facing, e.g. "EST-2026-0142"
+  leadId String
+  repId  String
+
+  status  EstimateStatus @default(DRAFT)
+  version Int            @default(1)
+  /// When a revision is sent, the previous estimate is SUPERSEDED and points here
+  supersededById String?  @unique
+
+  /// Which tier the customer accepted. Null until signed.
+  acceptedTier   TierLevel?
+  depositPercent Decimal    @db.Decimal(5, 2) @default(30.00)
+  taxRate        Decimal    @db.Decimal(6, 4) @default(0)
+  validUntil     DateTime?
+  customerNotes  String? // appears on the proposal
+  internalNotes  String? // never leaves the app
+
+  // --- GHL document mirror (decision D4) ---
+  ghlDocumentId    String?        @unique
+  documentStatus   DocumentStatus @default(NOT_CREATED)
+  documentUrl      String?
+  documentSentAt   DateTime?
+  documentViewedAt DateTime?
+  signedAt         DateTime?
+  signedByName     String?
+  signedByEmail    String?
+  declinedAt       DateTime?
+  declineReason    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lead         Lead            @relation(fields: [leadId], references: [id])
+  rep          User            @relation("EstimateRep", fields: [repId], references: [id])
+  supersededBy Estimate?       @relation("EstimateRevision", fields: [supersededById], references: [id])
+  supersedes   Estimate?       @relation("EstimateRevision")
+  tiers        EstimateTier[]
+  events       EstimateEvent[]
+  job          Job?
+  invoices     Invoice[]
+
+  @@index([leadId])
+  @@index([repId, status])
+  @@index([status])
+  @@map("estimates")
+}
+
+/// One of up to three priced options inside an estimate.
+/// Totals are stored as computed snapshots for report performance, and are
+/// recalculated inside the same transaction whenever a line item changes.
+model EstimateTier {
+  id         String    @id @default(cuid())
+  estimateId String
+  level      TierLevel
+  label      String? // override the default "Good"/"Better"/"Best" wording
+  summary    String?
+
+  discountPercent Decimal? @db.Decimal(5, 2)
+  discountAmount  Decimal? @db.Decimal(14, 2)
+  discountReason  String?
+  discountApprovedById String?
+
+  // Snapshots, all derived. Margin is computed, not entered.
+  subtotalPrice Decimal @db.Decimal(14, 2) @default(0)
+  subtotalCost  Decimal @db.Decimal(14, 2) @default(0)
+  taxAmount     Decimal @db.Decimal(14, 2) @default(0)
+  totalPrice    Decimal @db.Decimal(14, 2) @default(0)
+
+  sortOrder Int @default(0)
+
+  estimate  Estimate           @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  lineItems EstimateLineItem[]
+
+  @@unique([estimateId, level])
+  @@map("estimate_tiers")
+}
+
+/// The snapshot rule (decision D6) lives here: unitCost and unitPrice are
+/// copied from the product at the moment the line is added and never change,
+/// so a price-book edit next year cannot rewrite last year's margin.
+model EstimateLineItem {
+  id     String @id @default(cuid())
+  tierId String
+  productId String?
+
+  /// Denormalised so the line survives a product being renamed or deactivated
+  name        String
+  description String?
+  unit        UnitOfMeasure
+  quantity    Decimal       @db.Decimal(14, 4)
+  unitCost    Decimal       @db.Decimal(14, 4)
+  unitPrice   Decimal       @db.Decimal(14, 4)
+  taxable     Boolean       @default(true)
+  /// Free-text line not drawn from the price book
+  isCustom    Boolean       @default(false)
+  sortOrder   Int           @default(0)
+
+  createdAt DateTime @default(now())
+
+  tier    EstimateTier @relation(fields: [tierId], references: [id], onDelete: Cascade)
+  product Product?     @relation(fields: [productId], references: [id])
+
+  @@index([tierId])
+  @@map("estimate_line_items")
+}
+
+/// Timeline of what happened to an estimate, including GHL document events.
+model EstimateEvent {
+  id         String   @id @default(cuid())
+  estimateId String
+  type       String // "created","sent","viewed","signed","declined","superseded"
+  actorId    String?
+  payload    Json?
+  occurredAt DateTime @default(now())
+
+  estimate Estimate @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+
+  @@index([estimateId, occurredAt])
+  @@map("estimate_events")
+}
+
+// =============================================================================
+// DELIVERY - JOBS, PHOTOS, MATERIALS, ISSUES
+// =============================================================================
+
+/// Created automatically when an estimate is signed. Purely ours: GHL has no
+/// installation pipeline, which is the core reason this application exists.
+model Job {
+  id     String @id @default(cuid())
+  number String @unique // "JOB-2026-0088"
+
+  leadId     String
+  estimateId String @unique
+  /// Which tier was sold, copied at creation
+  soldTier   TierLevel
+
+  stage JobStage @default(DEPOSIT_PAID)
+
+  installerId String?
+  crewId      String?
+  scheduledDate DateTime?
+  arrivalWindowStart DateTime?
+  arrivalWindowEnd   DateTime?
+  estimatedDurationHours Decimal? @db.Decimal(6, 2)
+
+  /// Denormalised from the lead so an address correction after the fact does
+  /// not silently move a historical job
+  siteAddressLine1 String?
+  siteCity         String?
+  siteState        String?
+  sitePostalCode   String?
+  accessNotes      String? // gate code, dog, parking
+  specialInstructions String?
+
+  materialsReceived   Boolean   @default(false)
+  materialsReceivedAt DateTime?
+
+  enRouteAt    DateTime?
+  startedAt    DateTime?
+  completedAt  DateTime?
+  /// Office confirmation. Commission cannot become EARNED before this is set.
+  adminConfirmedAt   DateTime?
+  adminConfirmedById String?
+
+  /// Internal completion acknowledgement captured on the installer's device.
+  /// Distinct from the contract signature, which lives in GHL.
+  completionSignoffName String?
+  completionSignoffAt   DateTime?
+
+  cancelledAt   DateTime?
+  cancelReason  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lead           Lead              @relation(fields: [leadId], references: [id])
+  estimate       Estimate          @relation(fields: [estimateId], references: [id])
+  installer      User?             @relation("JobInstaller", fields: [installerId], references: [id])
+  crew           Crew?             @relation(fields: [crewId], references: [id])
+  stageHistory   JobStageHistory[]
+  photos         JobPhoto[]
+  issues         JobIssue[]
+  checklistItems JobChecklistItem[]
+  materialOrders MaterialOrder[]
+  invoices       Invoice[]
+  commissions    CommissionLedger[]
+
+  @@index([stage])
+  @@index([installerId, scheduledDate])
+  @@index([crewId, scheduledDate])
+  @@index([scheduledDate])
+  @@map("jobs")
+}
+
+model JobStageHistory {
+  id        String   @id @default(cuid())
+  jobId     String
+  fromStage JobStage?
+  toStage   JobStage
+  actorId   String?
+  reason    String?
+  /// True when the change came from the installer's offline queue
+  wasQueued Boolean  @default(false)
+  occurredAt DateTime @default(now())
+
+  job   Job   @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  actor User? @relation(fields: [actorId], references: [id])
+
+  @@index([jobId, occurredAt])
+  @@map("job_stage_history")
+}
+
+model JobPhoto {
+  id         String       @id @default(cuid())
+  jobId      String
+  fileId     String
+  type       JobPhotoType
+  caption    String?
+  uploadedById String
+  /// Client capture time, which can differ from upload time when offline
+  capturedAt DateTime?
+  createdAt  DateTime     @default(now())
+
+  job        Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  file       FileAsset @relation(fields: [fileId], references: [id])
+  uploadedBy User      @relation(fields: [uploadedById], references: [id])
+
+  @@index([jobId, type])
+  @@map("job_photos")
+}
+
+model JobIssue {
+  id          String           @id @default(cuid())
+  jobId       String
+  reportedById String
+  severity    JobIssueSeverity @default(MEDIUM)
+  status      JobIssueStatus   @default(OPEN)
+  title       String
+  body        String
+  resolvedById String?
+  resolvedAt  DateTime?
+  resolution  String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  job        Job   @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  reportedBy User  @relation("IssueReporter", fields: [reportedById], references: [id])
+  resolvedBy User? @relation("IssueResolver", fields: [resolvedById], references: [id])
+
+  @@index([jobId, status])
+  @@index([status, severity])
+  @@map("job_issues")
+}
+
+model JobChecklistTemplate {
+  id        String   @id @default(cuid())
+  name      String
+  /// [{ "label": "Verify subfloor moisture", "required": true, "sortOrder": 1 }]
+  items     Json
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@map("job_checklist_templates")
+}
+
+model JobChecklistItem {
+  id         String    @id @default(cuid())
+  jobId      String
+  label      String
+  required   Boolean   @default(false)
+  sortOrder  Int       @default(0)
+  completedAt DateTime?
+  completedById String?
+  note       String?
+
+  job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
+  @@map("job_checklist_items")
+}
+
+/// Ordering status only. This is not inventory; there is no stock-on-hand.
+model MaterialOrder {
+  id           String              @id @default(cuid())
+  jobId        String
+  supplierName String?
+  status       MaterialOrderStatus @default(NOT_ORDERED)
+  poNumber     String?
+  orderedAt    DateTime?
+  expectedAt   DateTime?
+  receivedAt   DateTime?
+  note         String?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  job   Job                 @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  lines MaterialOrderLine[]
+
+  @@index([jobId])
+  @@index([status])
+  @@map("material_orders")
+}
+
+model MaterialOrderLine {
+  id        String        @id @default(cuid())
+  orderId   String
+  productId String?
+  name      String
+  unit      UnitOfMeasure
+  quantityOrdered  Decimal @db.Decimal(14, 4)
+  quantityReceived Decimal @db.Decimal(14, 4) @default(0)
+
+  order   MaterialOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product?      @relation(fields: [productId], references: [id])
+
+  @@index([orderId])
+  @@map("material_order_lines")
+}
+
+// =============================================================================
+// MONEY - INVOICES AND PAYMENTS (MIRRORS OF GHL, DECISION D3)
+// =============================================================================
+
+/// Invoices are created in GHL and paid on GHL's Stripe connection.
+/// This table is a MIRROR: authoritative for our margin reporting, but never
+/// the source of truth for payment state. Only the sync worker writes
+/// status, amountPaid and amountDue.
+model Invoice {
+  id     String @id @default(cuid())
+  number String @unique
+
+  leadId     String
+  jobId      String?
+  estimateId String?
+
+  ghlInvoiceId String? @unique
+  ghlInvoiceUrl String?
+
+  status InvoiceStatus @default(DRAFT)
+
+  /// Price side, mirrored from GHL
+  subtotal   Decimal @db.Decimal(14, 2)
+  taxAmount  Decimal @db.Decimal(14, 2) @default(0)
+  discountAmount Decimal @db.Decimal(14, 2) @default(0)
+  total      Decimal @db.Decimal(14, 2)
+  amountPaid Decimal @db.Decimal(14, 2) @default(0)
+  amountDue  Decimal @db.Decimal(14, 2)
+
+  /// Cost side, ours alone. GHL never sees these. Snapshotted at issue time
+  /// so margin on a historical invoice is immune to price-book edits.
+  snapshotCost Decimal @db.Decimal(14, 2) @default(0)
+
+  depositPercent Decimal  @db.Decimal(5, 2) @default(30.00)
+  depositAmount  Decimal  @db.Decimal(14, 2) @default(0)
+  isDeposit      Boolean  @default(false)
+  /// Supplementary invoice raised by a change order (FR-ADM-35)
+  isChangeOrder  Boolean  @default(false)
+  parentInvoiceId String?
+
+  issuedAt DateTime?
+  dueAt    DateTime?
+  paidAt   DateTime?
+  voidedAt DateTime?
+  voidReason String?
+
+  /// Last time the sync worker reconciled this row against GHL
+  lastSyncedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lead      Lead              @relation(fields: [leadId], references: [id])
+  job       Job?              @relation(fields: [jobId], references: [id])
+  estimate  Estimate?         @relation(fields: [estimateId], references: [id])
+  lineItems InvoiceLineItem[]
+  payments  Payment[]
+
+  @@index([status])
+  @@index([jobId])
+  @@index([leadId])
+  @@index([dueAt])
+  @@map("invoices")
+}
+
+model InvoiceLineItem {
+  id        String  @id @default(cuid())
+  invoiceId String
+  productId String?
+
+  name      String
+  unit      UnitOfMeasure
+  quantity  Decimal @db.Decimal(14, 4)
+  unitPrice Decimal @db.Decimal(14, 4)
+  /// Snapshot, app-only, never transmitted to GHL
+  unitCost  Decimal @db.Decimal(14, 4)
+  taxable   Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  invoice Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id])
+
+  @@index([invoiceId])
+  @@map("invoice_line_items")
+}
+
+/// Mirror of a GHL transaction. Offline payments recorded by staff are
+/// created here first and pushed to GHL as a manual payment record.
+model Payment {
+  id        String @id @default(cuid())
+  invoiceId String
+
+  ghlTransactionId String? @unique
+
+  amount   Decimal       @db.Decimal(14, 2)
+  method   PaymentMethod
+  status   PaymentStatus @default(PENDING)
+  /// Last four of the card, check number, or similar. Never a full instrument.
+  reference String?
+  note      String?
+
+  /// True when a human recorded it here rather than the customer paying online
+  isOffline      Boolean @default(false)
+  recordedById   String?
+
+  refundedAmount Decimal  @db.Decimal(14, 2) @default(0)
+  refundedAt     DateTime?
+
+  receivedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  invoice    Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  recordedBy User?   @relation("PaymentRecorder", fields: [recordedById], references: [id])
+
+  @@index([invoiceId])
+  @@index([status])
+  @@map("payments")
+}
+
+// =============================================================================
+// COMMISSION AND EARNINGS
+// =============================================================================
+
+/// A rule may target one user or a whole role. User rules win over role rules.
+/// Overlapping effective windows for the same target are rejected by a check
+/// in application code; Postgres exclusion constraints can enforce it later.
+model CommissionRule {
+  id     String @id @default(cuid())
+  name   String
+  userId String?
+  roleId String?
+
+  type  CommissionRuleType @default(FLAT_PERCENT)
+  basis CommissionBasis    @default(CONTRACT_REVENUE)
+
+  /// FLAT_PERCENT: 0.0600 = 6%
+  ratePercent Decimal? @db.Decimal(6, 4)
+  /// FLAT_AMOUNT: fixed dollars per closed job
+  flatAmount  Decimal? @db.Decimal(14, 2)
+  /// TIERED_BY_MARGIN:
+  /// [{"minMarginPercent":0,"maxMarginPercent":30,"ratePercent":0.03},
+  ///  {"minMarginPercent":30,"maxMarginPercent":45,"ratePercent":0.06},
+  ///  {"minMarginPercent":45,"maxMarginPercent":null,"ratePercent":0.09}]
+  tiers Json?
+
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  active        Boolean   @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User? @relation(fields: [userId], references: [id])
+  role Role? @relation(fields: [roleId], references: [id])
+
+  ledgerEntries CommissionLedger[]
+
+  @@index([userId, effectiveFrom])
+  @@index([roleId, effectiveFrom])
+  @@map("commission_rules")
+}
+
+/// One row per commissionable event. Append-mostly: status transitions are
+/// updates, but amounts are never edited. A correction is a new CLAWED_BACK
+/// row plus a new ACCRUED row, so the ledger always reconciles.
+model CommissionLedger {
+  id     String @id @default(cuid())
+  userId String
+  jobId  String
+  ruleId String?
+
+  basis        CommissionBasis
+  /// The figure the percentage was applied to
+  basisAmount  Decimal          @db.Decimal(14, 2)
+  ratePercent  Decimal?         @db.Decimal(6, 4)
+  amount       Decimal          @db.Decimal(14, 2)
+  status       CommissionStatus @default(ACCRUED)
+
+  accruedAt   DateTime  @default(now())
+  earnedAt    DateTime?
+  approvedAt  DateTime?
+  approvedById String?
+  paidAt      DateTime?
+  clawedBackAt DateTime?
+  clawbackReason String?
+
+  payoutLineId String?
+  note         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user       User            @relation(fields: [userId], references: [id])
+  job        Job             @relation(fields: [jobId], references: [id])
+  rule       CommissionRule? @relation(fields: [ruleId], references: [id])
+  payoutLine PayoutLine?     @relation(fields: [payoutLineId], references: [id])
+
+  @@index([userId, status])
+  @@index([jobId])
+  @@index([status])
+  @@map("commission_ledger")
+}
+
+model Payout {
+  id     String       @id @default(cuid())
+  number String       @unique
+  status PayoutStatus @default(DRAFT)
+
+  periodStart DateTime
+  periodEnd   DateTime
+  totalAmount Decimal  @db.Decimal(14, 2) @default(0)
+
+  createdById  String
+  approvedById String?
+  approvedAt   DateTime?
+  paidAt       DateTime?
+  note         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  createdBy  User         @relation("PayoutCreator", fields: [createdById], references: [id])
+  approvedBy User?        @relation("PayoutApprover", fields: [approvedById], references: [id])
+  lines      PayoutLine[]
+
+  @@index([status])
+  @@map("payouts")
+}
+
+model PayoutLine {
+  id       String  @id @default(cuid())
+  payoutId String
+  userId   String
+  amount   Decimal @db.Decimal(14, 2)
+
+  payout  Payout             @relation(fields: [payoutId], references: [id], onDelete: Cascade)
+  user    User               @relation(fields: [userId], references: [id])
+  entries CommissionLedger[]
+
+  @@unique([payoutId, userId])
+  @@map("payout_lines")
+}
+
+// =============================================================================
+// CONFIGURATION AND WHITE-LABEL
+// =============================================================================
+
+/// Namespaced key/value settings. Secrets never live here; they live in
+/// IntegrationCredential, encrypted.
+model AppSetting {
+  id          String   @id @default(cuid())
+  key         String   @unique // "business.timezone", "leads.assignment.mode"
+  category    String // "business", "leads", "estimates", "sync", "branding"
+  value       Json
+  description String?
+  updatedById String?
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+
+  @@index([category])
+  @@map("app_settings")
+}
+
+/// White-label surface (decision D1). One active row; history kept.
+model BrandingProfile {
+  id           String  @id @default(cuid())
+  companyName  String
+  legalName    String?
+  logoFileId   String?
+  faviconFileId String?
+  primaryColor String  @default("#6B4526")
+  accentColor  String  @default("#B4813F")
+  supportEmail String?
+  supportPhone String?
+  websiteUrl   String?
+  addressBlock String?
+  documentHeaderHtml String?
+  emailFooterHtml    String?
+  isActive     Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  logo    FileAsset? @relation("BrandingLogo", fields: [logoFileId], references: [id])
+  favicon FileAsset? @relation("BrandingFavicon", fields: [faviconFileId], references: [id])
+
+  @@map("branding_profiles")
+}
+
+/// Encrypted third-party credentials. The GHL private integration token
+/// lives here, encrypted with a key held outside the database.
+model IntegrationCredential {
+  id       String @id @default(cuid())
+  provider String @unique // "gohighlevel"
+
+  /// AES-256-GCM ciphertext, key from env, never logged
+  encryptedToken String
+  encryptionKeyId String
+  locationId     String?
+  companyId      String?
+  scopes         String[] @default([])
+
+  connectedAt      DateTime?
+  connectedById    String?
+  lastVerifiedAt   DateTime?
+  lastVerifyError  String?
+  tokenExpiresAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("integration_credentials")
+}
+
+/// Maps GHL pipeline stage IDs to our LeadStage enum, so renaming a stage in
+/// GHL does not break sync (FR-ADM-46).
+model GhlPipelineMapping {
+  id            String    @id @default(cuid())
+  ghlPipelineId String
+  ghlStageId    String
+  ghlStageName  String
+  localStage    LeadStage
+  /// Which direction this mapping applies to
+  direction     SyncDirection @default(BIDIRECTIONAL)
+  isDefault     Boolean   @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([ghlPipelineId, ghlStageId])
+  @@map("ghl_pipeline_mappings")
+}
+
+/// Maps GHL custom fields to our columns or to a JSON extension bag (FR-ADM-47).
+model GhlFieldMapping {
+  id              String        @id @default(cuid())
+  entity          SyncEntity
+  ghlFieldId      String
+  ghlFieldKey     String
+  localPath       String // "scopeSummary" or "extra.squareFootage"
+  direction       SyncDirection @default(PULL)
+  transform       String? // named transform function, e.g. "phoneE164"
+  active          Boolean       @default(true)
+
+  createdAt DateTime @default(now())
+
+  @@unique([entity, ghlFieldId])
+  @@map("ghl_field_mappings")
+}
+
+// =============================================================================
+// SYNC INFRASTRUCTURE (DECISION D2)
+// =============================================================================
+
+/// The field ownership contract, as data. Seeded from the map in doc 05.
+/// The sync layer refuses to write any field whose owner is not itself.
+/// This is the mechanism that makes most conflicts structurally impossible.
+model SyncFieldPolicy {
+  id        String        @id @default(cuid())
+  entity    SyncEntity
+  field     String
+  owner     SyncOwner
+  direction SyncDirection
+  note      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([entity, field])
+  @@index([entity])
+  @@map("sync_field_policies")
+}
+
+/// Per-record sync bookkeeping. One row per mirrored entity instance.
+model SyncState {
+  id       String     @id @default(cuid())
+  entity   SyncEntity
+  localId  String
+  ghlId    String?
+
+  lastPushedAt   DateTime?
+  lastPulledAt   DateTime?
+  /// Hash of the last payload we pushed, so an unchanged record is not re-sent
+  lastPushHash   String?
+  /// Version or updatedAt reported by GHL at last pull, for staleness checks
+  remoteVersion  String?
+  /// Incremented on every local write, used to detect writes during an in-flight push
+  localVersion   Int        @default(0)
+
+  inConflict     Boolean    @default(false)
+  conflictNote   String?
+  lastError      String?
+  errorCount     Int        @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([entity, localId])
+  @@index([entity, ghlId])
+  @@index([inConflict])
+  @@map("sync_states")
+}
+
+/// Transactional outbox. A local write and its outbox row commit together, so
+/// a crash can never lose a push. The worker drains this with exponential
+/// backoff and a dead-letter state.
+model SyncOutbox {
+  id       String     @id @default(cuid())
+  entity   SyncEntity
+  localId  String
+  operation String // "create", "update", "stage_change", "send_document"
+  payload  Json
+
+  /// Guarantees GHL never applies the same operation twice
+  idempotencyKey String @unique
+
+  status       OutboxStatus @default(PENDING)
+  attempts     Int          @default(0)
+  maxAttempts  Int          @default(8)
+  nextAttemptAt DateTime    @default(now())
+  lastError    String?
+  lastAttemptAt DateTime?
+  completedAt  DateTime?
+
+  /// Ordering guarantee: operations on the same key process in sequence
+  partitionKey String
+
+  createdAt DateTime @default(now())
+
+  @@index([status, nextAttemptAt])
+  @@index([partitionKey, createdAt])
+  @@index([entity, localId])
+  @@map("sync_outbox")
+}
+
+/// Inbound webhook log with deduplication. GHL retries; we must be idempotent.
+model WebhookEvent {
+  id         String        @id @default(cuid())
+  provider   String        @default("gohighlevel")
+  /// GHL's event id. Unique index is what makes replay safe.
+  externalId String        @unique
+  eventType  String
+  payload    Json
+  signature  String?
+  signatureValid Boolean   @default(false)
+
+  status      WebhookStatus @default(RECEIVED)
+  attempts    Int           @default(0)
+  lastError   String?
+  processedAt DateTime?
+
+  receivedAt DateTime @default(now())
+
+  @@index([status, receivedAt])
+  @@index([eventType])
+  @@map("webhook_events")
+}
+
+/// Recorded whenever the sync layer detects that both sides changed the same
+/// owned field between syncs. Should be rare by design; a rising count means
+/// the ownership map is wrong somewhere.
+model SyncConflict {
+  id        String     @id @default(cuid())
+  entity    SyncEntity
+  localId   String
+  field     String
+  localValue  Json?
+  remoteValue Json?
+  resolvedAs  SyncOwner
+  resolvedAt  DateTime?
+  resolvedById String?
+  createdAt   DateTime   @default(now())
+
+  @@index([entity, localId])
+  @@index([resolvedAt])
+  @@map("sync_conflicts")
+}
+
+// =============================================================================
+// FILES AND NOTIFICATIONS
+// =============================================================================
+
+model FileAsset {
+  id           String  @id @default(cuid())
+  storageKey   String  @unique // S3 object key
+  bucket       String
+  originalName String
+  mimeType     String
+  sizeBytes    Int
+  width        Int?
+  height       Int?
+  thumbnailKey String?
+  checksum     String?
+  uploadedById String?
+
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+
+  uploadedBy       User?             @relation("FileUploader", fields: [uploadedById], references: [id])
+  jobPhotos        JobPhoto[]
+  userAvatars      User[]            @relation("UserAvatar")
+  brandingLogos    BrandingProfile[] @relation("BrandingLogo")
+  brandingFavicons BrandingProfile[] @relation("BrandingFavicon")
+
+  @@index([uploadedById])
+  @@map("file_assets")
+}
+
+model Notification {
+  id      String  @id @default(cuid())
+  userId  String
+  type    String // "lead.assigned", "estimate.signed", "job.issue.reported"
+  title   String
+  body    String?
+  /// Deep link into the app
+  linkUrl String?
+  entity  String?
+  entityId String?
+
+  readAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+model NotificationPreference {
+  id      String              @id @default(cuid())
+  userId  String
+  type    String
+  channel NotificationChannel
+  enabled Boolean             @default(true)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type, channel])
+  @@map("notification_preferences")
+}
+
+/// Background job bookkeeping for SLA timers and scheduled work, when
+/// pg-boss is used instead of Redis. Omit this model if BullMQ is chosen.
+model ScheduledTask {
+  id         String    @id @default(cuid())
+  key        String    @unique // "lead:sla:<leadId>"
+  type       String // "lead.sla.expire", "estimate.expire"
+  payload    Json
+  runAt      DateTime
+  executedAt DateTime?
+  cancelledAt DateTime?
+  lastError  String?
+  createdAt  DateTime  @default(now())
+
+  @@index([runAt, executedAt])
+  @@map("scheduled_tasks")
+}

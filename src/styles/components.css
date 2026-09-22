@@ -1,0 +1,428 @@
+/* ==========================================================================
+   components.css  -  buttons, cards, pills, tables, kanban, modals, toasts
+   One visual language across all four role views. Surfaces stay neutral and
+   white so the workspace reads like GoHighLevel; brand blue is the only strong
+   accent, and it is used as a soft tint on anything that is only selected
+   (segments, list rows) and as a fill only on a primary button.
+   ========================================================================== */
+
+/* --- Buttons ------------------------------------------------------------ */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  border: 1px solid var(--rule-strong);
+  background: var(--panel);
+  color: var(--ink);
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 13.5px; font-weight: 600;
+  line-height: 1.2; white-space: nowrap;
+  box-shadow: var(--lift-1);
+  transition: background .13s ease, border-color .13s ease, color .13s ease, box-shadow .13s ease, transform .06s ease;
+}
+.btn:hover { background: var(--panel-sunk); border-color: var(--rule-strong); color: var(--ink); }
+.btn:active { transform: translateY(1px); box-shadow: none; }
+.btn:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.btn[disabled], .btn[aria-disabled="true"] {
+  opacity: .45; cursor: not-allowed; pointer-events: none; box-shadow: none;
+}
+.btn svg { width: 16px; height: 16px; flex: none; }
+
+.btn-primary {
+  background: var(--blue); border-color: var(--blue); color: #fff;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--blue) 40%, transparent);
+}
+.btn-primary:hover { background: var(--blue-700); border-color: var(--blue-700); color: #fff; }
+
+.btn-go { background: var(--moss); border-color: var(--moss); color: #fff; }
+.btn-go:hover { background: #0B8550; border-color: #0B8550; color: #fff; }
+
+.btn-danger { background: var(--panel); border-color: color-mix(in srgb, var(--clay) 40%, var(--rule-strong)); color: var(--clay); }
+.btn-danger:hover { background: var(--clay-soft); border-color: var(--clay); color: var(--clay); }
+
+.btn-ghost { background: transparent; border-color: transparent; color: var(--ink-2); box-shadow: none; }
+.btn-ghost:hover { background: var(--panel-sunk); border-color: transparent; color: var(--ink); }
+
+.btn-sm { padding: 5.5px 10px; font-size: 12.5px; border-radius: 7px; gap: 5px; }
+.btn-sm svg { width: 14px; height: 14px; }
+.btn-lg { padding: 12px 20px; font-size: 15px; border-radius: 10px; }
+.btn-block { width: 100%; }
+
+/* --- Panels / cards ----------------------------------------------------- */
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  box-shadow: var(--lift-1);
+  overflow: hidden;
+}
+.panel-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--rule);
+}
+.panel-head h2, .panel-head h3 { margin: 0; }
+.panel-body { padding: 16px; }
+.panel-body.tight { padding: 14px 16px; }
+.panel-foot {
+  padding: 12px 16px;
+  border-top: 1px solid var(--rule);
+  background: var(--panel-sunk);
+  display: flex; gap: 9px; align-items: center; flex-wrap: wrap;
+}
+
+/* Stat tiles read as a ledger strip, not as identical cards. */
+.stat-strip {
+  display: grid; gap: 1px;
+  background: var(--rule);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  box-shadow: var(--lift-1);
+  grid-template-columns: repeat(auto-fit, minmax(156px, 1fr));
+}
+.stat { background: var(--panel); padding: 15px 16px 16px; }
+.stat-label { font-size: 11.5px; color: var(--ink-3); font-weight: 700; letter-spacing: .02em; }
+.stat-value {
+  font-family: var(--display); font-size: 23px; font-weight: 700;
+  font-variant-numeric: tabular-nums; margin-top: 5px; line-height: 1.1;
+}
+.stat-note { font-size: 12px; color: var(--ink-2); margin-top: 5px; }
+.stat-value.good { color: var(--moss); }
+.stat-value.warn { color: var(--clay); }
+.stat-value.gold { color: var(--gold-deep); }
+
+/* --- Stacked list rows --------------------------------------------------
+   Used by the appointment and notes lists. They live in one panel, so only
+   the last row drops its hairline; otherwise a stray line hangs under the
+   panel's own bottom edge. */
+.list-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 12px 16px; border-bottom: 1px solid var(--rule);
+  transition: background .1s ease;
+}
+.list-row:last-child { border-bottom: 0; }
+.list-row:hover { background: var(--panel-sunk); }
+.list-row .lr-main { min-width: 0; }
+.list-row .lr-title { font-weight: 600; font-size: 13.5px; }
+.list-row .lr-meta { font-size: 12.5px; color: var(--ink-3); margin-top: 3px; }
+.list-row .lr-right { flex: none; text-align: right; }
+
+.note-row, .dotted-row { padding: 9px 0; border-bottom: 1px dotted var(--rule); }
+.note-row:first-child, .dotted-row:first-child { padding-top: 2px; }
+.note-row:last-child, .dotted-row:last-child { border-bottom: 0; padding-bottom: 0; }
+.note-row .nr-text { font-size: 13.5px; }
+.note-row .nr-meta { font-size: 12.5px; color: var(--ink-3); margin-top: 3px; }
+
+/* --- Pills / badges ----------------------------------------------------- */
+.pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 2.5px 9px; border-radius: var(--r-pill);
+  font-size: 12px; font-weight: 600;
+  background: var(--panel-sunk); color: var(--ink-2);
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.pill-dot::before {
+  content: ''; width: 6px; height: 6px; border-radius: 50%;
+  background: currentColor; flex: none;
+}
+.pill-moss  { background: var(--moss-soft);  color: var(--moss); }
+.pill-clay  { background: var(--clay-soft);  color: var(--clay); }
+.pill-brass { background: var(--brass-soft); color: var(--brass); }
+.pill-oak   { background: var(--gold-soft);  color: var(--gold-deep); }
+.pill-slate { background: var(--slate-soft); color: var(--slate); }
+.pill-blue  { background: var(--blue-soft);  color: var(--blue-700); }
+.pill-outline { background: var(--panel); border-color: var(--rule-strong); color: var(--ink-2); }
+
+/* --- Forms -------------------------------------------------------------- */
+.field { display: block; margin-bottom: 14px; }
+.field > label,
+.label {
+  display: block; font-size: 12px; font-weight: 700;
+  color: var(--ink-2); margin-bottom: 6px; letter-spacing: .01em;
+}
+.input, .select, .textarea {
+  width: 100%;
+  background: var(--panel);
+  border: 1px solid var(--rule-strong);
+  border-radius: 8px;
+  padding: 8.5px 11px;
+  font-size: 14px;
+  color: var(--ink);
+  transition: border-color .12s ease, box-shadow .12s ease;
+}
+.input::placeholder, .textarea::placeholder { color: var(--ink-3); }
+.input:focus, .select:focus, .textarea:focus {
+  outline: none;
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 16%, transparent);
+}
+.textarea { min-height: 80px; resize: vertical; font-family: var(--body); }
+.select { appearance: none; padding-right: 30px; cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, var(--ink-3) 50%),
+                    linear-gradient(135deg, var(--ink-3) 50%, transparent 50%);
+  background-position: calc(100% - 15px) 17px, calc(100% - 10px) 17px;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+.field-row { display: flex; gap: 12px; flex-wrap: wrap; }
+.field-row > .field { flex: 1 1 150px; margin-bottom: 14px; }
+.check { display: flex; align-items: flex-start; gap: 9px; font-size: 14px; cursor: pointer; }
+.check input { margin-top: 3px; width: 16px; height: 16px; accent-color: var(--blue); }
+
+/* --- Tables -------------------------------------------------------------
+   The scroll region is the wrapper, not the page. Two reasons: a wide table
+   still scrolls sideways, and a long one scrolls inside its card with the
+   header pinned to the top of that region. That is also the only way the
+   sticky header can work here, because a clipped ancestor such as .panel
+   becomes the scrollport, and an offset against the viewport would then push
+   the header down into the middle of its own rows. So: top is 0, and the
+   wrapper owns the scrolling. */
+.table-wrap {
+  overflow: auto;
+  max-height: 70vh;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+table.grid { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+table.grid th {
+  text-align: left; font-size: 11px; font-weight: 800; color: var(--ink-3);
+  letter-spacing: .06em; text-transform: uppercase;
+  padding: 10px 14px; background: var(--panel-sunk);
+  border-bottom: 1px solid var(--rule);
+  position: sticky; top: 0; z-index: 1;
+  white-space: nowrap;
+}
+table.grid td { padding: 11px 14px; border-bottom: 1px solid var(--rule); vertical-align: middle; }
+table.grid tbody tr:last-child td { border-bottom: 0; }
+table.grid tbody tr { transition: background .1s ease; }
+table.grid tbody tr:hover { background: var(--blue-tint); }
+table.grid td.num, table.grid th.num { text-align: right; font-variant-numeric: tabular-nums; }
+table.grid .muted { color: var(--ink-3); }
+
+/* Shrink-to-content columns (role, status, dates, row actions) so the
+   remaining columns (typically name/email) absorb the rest of the table's
+   width instead of every column splitting it evenly. */
+table.grid td.col-tight, table.grid th.col-tight { width: 1%; white-space: nowrap; }
+
+/* Sort control inside a sticky header. It inherits the header's own type so
+   an unsorted column looks exactly like plain text. */
+table.grid th .th-sort {
+  display: inline-flex; align-items: center; gap: 4px;
+  border: 0; background: transparent; padding: 0; margin: 0;
+  font: inherit; color: inherit; letter-spacing: inherit; text-transform: inherit;
+}
+table.grid th .th-sort:hover { color: var(--ink-2); }
+table.grid th .th-sort .th-caret { font-size: 9px; line-height: 1; opacity: .9; }
+
+/* --- Kanban ------------------------------------------------------------- */
+.board {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(252px, 1fr);
+  gap: 14px;
+  overflow-x: auto;
+  padding: 16px;
+  background: var(--panel-sunk);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  -webkit-overflow-scrolling: touch;
+}
+.col { display: flex; flex-direction: column; min-width: 0; }
+.col-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 0 2px 10px;
+  border-bottom: 2px solid var(--rule-strong);
+  margin-bottom: 11px;
+}
+.col-head .name { font-size: 12.5px; font-weight: 700; letter-spacing: .01em; }
+.col-head .count {
+  font-size: 11.5px; color: var(--ink-2); font-variant-numeric: tabular-nums;
+  background: var(--panel); border: 1px solid var(--rule); border-radius: var(--r-pill); padding: 1px 8px;
+}
+.col-body { display: flex; flex-direction: column; gap: 9px; min-height: 44px; }
+.col.won   .col-head { border-bottom-color: var(--moss); }
+.col.lost  .col-head { border-bottom-color: var(--clay); }
+
+.tile {
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-left: 3px solid color-mix(in srgb, var(--blue) 40%, var(--rule-strong));
+  border-radius: 9px;
+  padding: 11px 12px;
+  box-shadow: var(--lift-1);
+  cursor: pointer;
+  transition: border-color .12s ease, box-shadow .12s ease, transform .08s ease;
+}
+.tile:hover { border-color: var(--rule-strong); border-left-color: var(--blue); box-shadow: var(--lift-2); transform: translateY(-1px); }
+.tile:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+.tile .tile-name { font-weight: 700; font-size: 13.5px; }
+.tile .tile-meta { font-size: 12px; color: var(--ink-3); margin-top: 4px; }
+.tile .tile-foot { margin-top: 9px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.tile.won  { border-left-color: var(--moss); }
+.tile.lost { border-left-color: var(--clay); opacity: .85; }
+
+/* --- Charts --------------------------------------------------------------
+   Chart.js canvases live inside the same white card the CSS bars used, so the
+   dashboard keeps its frame while the visual itself becomes a real chart. */
+.chart-box { position: relative; height: 260px; width: 100%; }
+.chart-box.short { height: 220px; }
+
+/* --- Progress rail (job stage) ------------------------------------------ */
+.rail { display: flex; align-items: center; gap: 0; flex-wrap: wrap; }
+.rail-step { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-3); }
+.rail-step + .rail-step::before {
+  content: ''; width: 16px; height: 1px; background: var(--rule-strong); margin: 0 7px;
+}
+.rail-step .dot {
+  width: 9px; height: 9px; border-radius: 50%;
+  border: 1.5px solid var(--rule-strong); background: var(--panel);
+}
+.rail-step.done .dot { background: var(--moss); border-color: var(--moss); }
+.rail-step.current .dot { background: var(--blue); border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-soft); }
+.rail-step.current { color: var(--ink); font-weight: 700; }
+
+/* --- Modal -------------------------------------------------------------- */
+/* The estimate builder needs the extra width to break into two columns. */
+.modal.wide { max-width: 900px; }
+.scrim {
+  position: fixed; inset: 0; z-index: 90;
+  background: rgba(2,14,32,.5);
+  backdrop-filter: blur(3px);
+  display: flex; align-items: center; justify-content: center;
+  padding: 18px;
+  animation: fade .14s ease;
+}
+@keyframes fade { from { opacity: 0; } }
+.modal {
+  background: var(--panel);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r-lg);
+  box-shadow: var(--lift-3);
+  width: 100%; max-width: 560px;
+  max-height: calc(100vh - 36px);
+  display: flex; flex-direction: column;
+  animation: rise .16s ease;
+  overflow: hidden;
+}
+@keyframes rise { from { transform: translateY(10px); opacity: 0; } }
+.modal-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  padding: 15px 16px 13px;
+  border-bottom: 1px solid var(--rule);
+}
+.modal-head h3 { letter-spacing: -0.015em; }
+.modal-body { padding: 16px; overflow-y: auto; }
+.modal-foot {
+  padding: 13px 16px; border-top: 1px solid var(--rule);
+  display: flex; gap: 9px; justify-content: flex-end; flex-wrap: wrap;
+  background: var(--panel-sunk);
+}
+.x-btn {
+  border: 0; background: transparent; color: var(--ink-3);
+  font-size: 20px; line-height: 1; padding: 4px 8px; border-radius: 6px;
+}
+.x-btn:hover { background: var(--panel-sunk); color: var(--ink); }
+
+/* --- Toasts -------------------------------------------------------------
+   Rendered through Radix Toast so pause-on-hover, swipe and screen-reader
+   announcements come for free; the markup keeps the original class names. */
+.toast-dock {
+  position: fixed; z-index: 120; left: 50%; transform: translateX(-50%);
+  bottom: calc(var(--nav-h) + 16px);
+  display: flex; flex-direction: column; gap: 8px; align-items: center;
+  list-style: none; margin: 0; padding: 0;
+  width: min(420px, calc(100vw - 24px));
+  outline: none;
+}
+@media (min-width: 860px) { .toast-dock { bottom: 22px; } }
+.toast {
+  pointer-events: auto;
+  width: 100%;
+  display: flex; align-items: flex-start; gap: 9px;
+  background: var(--navy-900); color: var(--ink-inv);
+  border-radius: 9px;
+  padding: 11px 14px;
+  box-shadow: var(--lift-3);
+  font-size: 13.5px;
+  animation: toastIn .18s ease;
+}
+@keyframes toastIn { from { transform: translateY(12px); opacity: 0; } }
+.toast[data-state="closed"] { animation: toastOut .2s ease forwards; }
+@keyframes toastOut { to { transform: translateY(8px); opacity: 0; } }
+.toast .mark { flex: none; width: 7px; height: 7px; border-radius: 50%; margin-top: 6px; background: var(--blue-400); }
+.toast.ok   .mark { background: #5FD3A0; }
+.toast.warn .mark { background: #F2A6A0; }
+.toast .txt { flex: 1 1 auto; }
+
+/* --- Empty states ------------------------------------------------------- */
+.empty {
+  text-align: center; padding: 34px 20px;
+  color: var(--ink-3);
+  border: 1px dashed var(--rule-strong);
+  border-radius: var(--r-lg);
+  background: var(--panel);
+}
+.empty .empty-mark { font-family: var(--display); font-size: 19px; color: var(--ink-2); margin-bottom: 6px; }
+.empty p { margin: 0 auto; max-width: 360px; font-size: 13.5px; }
+
+/* --- Skeleton / loading ------------------------------------------------- */
+.skel {
+  background: linear-gradient(90deg, var(--panel-sunk) 25%, var(--blue-tint) 37%, var(--panel-sunk) 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.3s ease infinite;
+  border-radius: var(--r-sm);
+  height: 13px;
+}
+@keyframes shimmer { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
+
+/* --- Sync log feed ------------------------------------------------------ */
+.sync-feed { max-height: 280px; overflow-y: auto; }
+.sync-item {
+  display: flex; gap: 10px; align-items: flex-start;
+  padding: 9px 0; border-bottom: 1px dotted var(--rule);
+  font-size: 13px;
+}
+.sync-item:last-child { border-bottom: 0; }
+.sync-item .arrow {
+  flex: none; font-family: var(--mono); font-size: 10.5px; font-weight: 700;
+  padding: 2px 6px; border-radius: 5px;
+}
+.sync-item.out .arrow { background: var(--blue-soft); color: var(--blue-700); }
+.sync-item.in  .arrow { background: var(--slate-soft); color: var(--slate); }
+.sync-item .msg { flex: 1 1 auto; min-width: 0; }
+.sync-item time { flex: none; font-size: 11.5px; color: var(--ink-3); }
+
+/* --- Photo chips -------------------------------------------------------- */
+.photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 10px; }
+.photo-chip {
+  border: 1px solid var(--rule); border-radius: 9px;
+  background: var(--panel-sunk);
+  aspect-ratio: 4 / 3;
+  display: flex; flex-direction: column; justify-content: flex-end;
+  padding: 8px; overflow: hidden; position: relative;
+}
+.photo-chip::before {
+  content: ''; position: absolute; inset: 0;
+  background:
+    repeating-linear-gradient(115deg, transparent 0 13px, color-mix(in srgb, var(--blue) 10%, transparent) 13px 15px);
+}
+.photo-chip .lbl { position: relative; font-size: 11.5px; font-weight: 700; color: var(--blue-700); }
+.photo-chip .tm { position: relative; font-size: 10.5px; color: var(--ink-3); }
+
+/* --- Misc --------------------------------------------------------------- */
+.divider { height: 1px; background: var(--rule); margin: 16px 0; border: 0; }
+.kv { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 7px 16px; font-size: 13.5px; }
+.kv dt { color: var(--ink-3); }
+.kv dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; overflow-wrap: anywhere; }
+.money-big { font-family: var(--display); font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.seg {
+  display: inline-flex; background: var(--panel-sunk);
+  border: 1px solid var(--rule); border-radius: 8px; padding: 2px; gap: 2px;
+}
+.seg button {
+  border: 0; background: transparent; color: var(--ink-2);
+  padding: 5px 12px; border-radius: 6px; font-size: 13px; font-weight: 600;
+}
+.seg button:hover { color: var(--ink); }
+.seg button[aria-pressed="true"] { background: var(--tab-tint); color: var(--tab-ink-on); box-shadow: none; }

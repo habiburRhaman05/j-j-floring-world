@@ -1,0 +1,423 @@
+/* ==========================================================================
+   layout.css  -  app shell
+   Modelled on GoHighLevel's own frame so the tool reads as native when it is
+   embedded as a GHL custom page: a white top bar carrying the logo, the page
+   actions and the signed-in user, a horizontal tab strip under it, and a
+   neutral canvas holding white cards.
+
+   There is no sidebar. Destinations live in the tab strip, which is the same
+   pattern GHL uses for a module's sub navigation: a bordered pill of tabs
+   with a blue underline on the one you are standing on. The canvas and the
+   cards stay white so the only brand colour on a page is the accent on the
+   active tab and the primary button.
+
+   Responsive: the tab strip scrolls sideways instead of collapsing, so every
+   destination stays one tap away on a phone. The Installer never gets a tab
+   strip and keeps its bottom tab bar.
+   ========================================================================== */
+
+/* --- Shell -------------------------------------------------------------- */
+.app { min-height: 100vh; display: flex; flex-direction: column; }
+.shell { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; }
+
+/* --- Top bar ------------------------------------------------------------ */
+.appbar {
+  position: sticky; top: 0; z-index: 40;
+  height: var(--header-h); flex: none;
+  display: flex; align-items: center; gap: 12px;
+  padding: 0 18px;
+  background: var(--panel);
+}
+/* The Installer has no tab strip, so its top bar carries the hairline. */
+.appbar.appbar-solo { border-bottom: 1px solid var(--rule); }
+.appbar > * { flex: none; min-width: 0; }
+.appbar .spacer { flex: 1 1 auto; }
+
+.appbar .bar-logo { display: flex; align-items: center; flex: none; text-decoration: none; }
+.appbar .bar-logo img { height: 26px; width: auto; }
+
+.bar-rule { width: 1px; height: 24px; background: var(--rule); flex: none; }
+
+.crumb-wrap { display: flex; flex-direction: column; min-width: 0; }
+.crumb {
+  font-weight: 700; font-size: 15px;
+  letter-spacing: -0.01em; line-height: 1.3;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.crumb-sub {
+  font-size: 11.5px; color: var(--ink-3); line-height: 1.3;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.appbar .bar-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid var(--rule-strong); background: var(--panel);
+  color: var(--ink); border-radius: 8px;
+  padding: 7px 12px; font-size: 13px; font-weight: 600;
+  box-shadow: var(--lift-1);
+  transition: background .12s ease, border-color .12s ease, color .12s ease;
+}
+.appbar .bar-btn:hover { background: var(--panel-sunk); }
+.appbar .bar-btn svg { width: 15px; height: 15px; }
+.appbar .bar-btn.bar-btn-accent {
+  background: var(--blue); border-color: var(--blue); color: #fff;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--blue) 40%, transparent);
+}
+.appbar .bar-btn.bar-btn-accent:hover { background: var(--blue-700); border-color: var(--blue-700); }
+
+.bar-user { display: flex; align-items: center; flex: none; }
+.bar-avatar {
+  width: 32px; height: 32px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--tab-tint); color: var(--tab-ink-on);
+  border: 1px solid color-mix(in srgb, var(--blue) 20%, transparent);
+  font-size: 11.5px; font-weight: 800; letter-spacing: .02em;
+}
+
+.role-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11.5px; font-weight: 700;
+  padding: 4px 10px; border-radius: var(--r-pill);
+  background: var(--blue-soft); color: var(--blue-700);
+  border: 1px solid color-mix(in srgb, var(--blue) 18%, transparent);
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .appbar { gap: 9px; padding: 0 12px; }
+  .crumb { font-size: 14.5px; }
+  .crumb-sub { display: none; }
+  .bar-rule { display: none; }
+  .appbar .bar-btn { padding: 7px 10px; }
+  .appbar .bar-btn .lbl { display: none; }
+}
+
+/* --- Tab strip (the GHL navigation) ------------------------------------- */
+.subnav {
+  position: sticky; top: var(--header-h); z-index: 39;
+  flex: none;
+  background: var(--panel);
+  border-bottom: 1px solid var(--rule);
+}
+.subnav-inner {
+  width: 100%; margin: 0 auto;
+  padding: 10px 24px;
+  display: flex; align-items: center;
+  overflow-x: auto; overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+.subnav-inner::-webkit-scrollbar { height: 6px; }
+.subnav-inner::-webkit-scrollbar-thumb { background: var(--rule-strong); border-radius: 99px; }
+.subnav-inner::-webkit-scrollbar-track { background: transparent; }
+
+.tabs {
+  display: inline-flex; align-items: stretch; flex: none;
+  border: 1px solid var(--rule);
+  border-radius: 9px;
+  background: var(--panel);
+  overflow: hidden;
+}
+.tabs > * + * { border-left: 1px solid var(--tab-divider); }
+
+/* The bold leading cell. GHL labels the module here, then lists the tabs. */
+.tabs-title {
+  display: inline-flex; align-items: center;
+  height: 38px; padding: 0 16px;
+  font-size: 14px; font-weight: 800; letter-spacing: -0.012em;
+  color: var(--ink); white-space: nowrap;
+}
+
+/* Destinations are route links, so these selectors cover <a> as well as the
+   <button> the prototype used. */
+.tabs button, .tabs a {
+  height: 38px; padding: 0 16px;
+  display: inline-flex; align-items: center;
+  border: 0; background: transparent; cursor: pointer;
+  font-size: 13.5px; font-weight: 600; color: var(--tab-ink);
+  white-space: nowrap; text-decoration: none;
+  box-shadow: inset 0 -2px 0 transparent;
+  transition: background .13s ease, color .13s ease, box-shadow .13s ease;
+}
+.tabs button:hover, .tabs a:hover { background: var(--tab-hover); color: var(--ink); }
+.tabs button[aria-selected="true"], .tabs a[aria-selected="true"] {
+  background: var(--tab-tint);
+  color: var(--tab-ink-on);
+  box-shadow: inset 0 -2px 0 var(--blue);
+}
+.tabs button:focus-visible, .tabs a:focus-visible { outline: 2px solid var(--blue); outline-offset: -3px; }
+/* On a phone the label cell would eat the room the tabs need. The top bar
+   already says where you are, so the strip drops to destinations only. */
+@media (max-width: 560px) { .tabs-title { display: none; } }
+
+/* --- Main --------------------------------------------------------------- */
+.main {
+  flex: 1 1 auto;
+  width: 100%;
+  margin: 0 auto;
+  padding: 20px 24px 44px;
+}
+.view { display: none; }
+.view.is-active { display: block; animation: viewIn .18s ease; }
+@keyframes viewIn { from { opacity: 0; transform: translateY(4px); } }
+
+.view-head { margin-bottom: 16px; }
+.view-head h1 { font-size: 21px; }
+.view-head .sub { font-size: 13.5px; color: var(--ink-2); margin-top: 4px; max-width: 78ch; }
+
+.grid-2 { display: grid; gap: var(--gap); grid-template-columns: 1fr; }
+.grid-3 { display: grid; gap: var(--gap); grid-template-columns: 1fr; }
+@media (min-width: 900px) {
+  .grid-2 { grid-template-columns: 1fr 1fr; }
+  .grid-3 { grid-template-columns: 2fr 1fr; }
+}
+.section + .section { margin-top: var(--gap); }
+
+/* --- Demo banner -------------------------------------------------------- */
+.demo-banner {
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--blue);
+  border-radius: var(--r-lg);
+  padding: 12px 14px;
+  margin-bottom: var(--gap);
+  display: flex; gap: 12px; align-items: flex-start;
+  font-size: 13.5px; color: var(--ink-2);
+}
+.demo-banner strong { color: var(--ink); }
+.demo-banner .close { margin-left: auto; }
+
+/* --- Sign in ------------------------------------------------------------ */
+/* White first: a single card on a hint of blue, so the brand shows up in the
+   logo, the tagline and the role accents rather than in a wall of colour. */
+.login-page {
+  min-height: 100vh;
+  display: flex; align-items: center; justify-content: center;
+  padding: 32px 18px 44px;
+  background:
+    radial-gradient(880px 400px at 50% -180px, var(--blue-soft), transparent 72%),
+    var(--paper);
+}
+.login-main { width: 100%; max-width: 800px; }
+.login-card {
+  width: 100%;
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  box-shadow: var(--lift-2);
+  padding: 28px 28px 22px;
+}
+@media (max-width: 560px) { .login-card { padding: 22px 18px 18px; } }
+
+.login-brand { display: flex; align-items: center; }
+.login-brand a { display: block; }
+.login-brand img { height: 34px; width: auto; }
+.login-tag {
+  font-family: var(--script); font-size: 21px; line-height: 1.1;
+  color: var(--gold-deep); margin: 9px 0 14px;
+}
+.login-eyebrow { margin-bottom: 6px; }
+.login-main h1 { font-size: 24px; font-family: var(--serif); font-weight: 700; }
+.login-main .lede { font-size: 13.5px; color: var(--ink-2); margin: 8px 0 20px; max-width: 64ch; }
+
+.role-grid { display: grid; gap: 12px; grid-template-columns: 1fr; margin-top: 4px; }
+@media (min-width: 720px) { .role-grid { grid-template-columns: 1fr 1fr; } }
+
+.role-btn {
+  text-align: left;
+  border: 1px solid var(--rule);
+  background: var(--panel);
+  border-radius: var(--r-lg);
+  padding: 15px 16px;
+  display: flex; gap: 13px; align-items: flex-start;
+  box-shadow: var(--lift-1);
+  transition: transform .1s ease, box-shadow .14s ease, border-color .14s ease;
+  position: relative; overflow: hidden;
+}
+.role-btn::after {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  background: var(--accent, var(--blue));
+}
+.role-btn:hover {
+  transform: translateY(-2px); box-shadow: var(--lift-2);
+  border-color: color-mix(in srgb, var(--accent, var(--blue)) 45%, var(--rule));
+}
+.role-btn .ico {
+  flex: none; width: 40px; height: 40px; border-radius: 10px;
+  display: grid; place-items: center;
+  background: color-mix(in srgb, var(--accent, var(--blue)) 12%, var(--panel));
+  color: var(--accent, var(--blue));
+}
+.role-btn .rn { font-size: 15px; font-weight: 700; letter-spacing: -0.012em; }
+.role-btn .rd { font-size: 13px; color: var(--ink-2); margin-top: 4px; line-height: 1.45; }
+.role-btn .who { font-size: 12px; color: var(--ink-3); margin-top: 9px; }
+
+.login-points {
+  list-style: none; margin: 22px 0 0; padding: 16px 0 0;
+  border-top: 1px solid var(--rule);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.login-points li { display: flex; gap: 9px; align-items: flex-start; font-size: 12.5px; color: var(--ink-2); }
+.login-points .tick {
+  flex: none; width: 16px; height: 16px; border-radius: 50%; margin-top: 1px;
+  background: var(--tab-tint); color: var(--tab-ink-on);
+  display: grid; place-items: center; font-size: 9.5px; font-weight: 800;
+}
+
+.login-foot {
+  margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--rule);
+  display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+  font-size: 12.5px; color: var(--ink-3);
+}
+
+/* One global sign-in. The card holds a single form rather than the role picker
+   the prototype used, so it is narrower and the form owns its own rhythm. */
+.login-narrow { max-width: 452px; }
+.login-form { margin-top: 4px; display: flex; flex-direction: column; gap: 14px; }
+.login-form .field { margin-bottom: 0; }
+.login-alert {
+  display: flex; gap: 8px; align-items: flex-start;
+  padding: 10px 12px; border-radius: var(--r-md);
+  background: var(--clay-soft); color: var(--clay);
+  font-size: 12.5px; font-weight: 600;
+}
+.field-err { font-size: 12px; font-weight: 600; color: var(--clay); margin-top: 5px; }
+.login-hint { font-size: 12.5px; color: var(--ink-3); line-height: 1.55; }
+.login-hint code {
+  font-family: var(--mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 12px; padding: 1px 5px; border-radius: var(--r-sm);
+  background: var(--panel-sunk); color: var(--ink-2);
+}
+
+/* --- Installer (mobile first) ------------------------------------------ */
+.inst-main { padding-bottom: calc(var(--nav-h) + 30px); }
+
+.bottombar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+  height: var(--nav-h);
+  background: var(--panel);
+  border-top: 1px solid var(--rule);
+  display: flex;
+  padding: 0 6px;
+  padding-bottom: env(safe-area-inset-bottom);
+  box-shadow: 0 -2px 14px -8px rgba(2,14,32,.28);
+}
+.bottombar button, .bottombar a {
+  flex: 1 1 0; margin: 6px 3px; border: 0; background: transparent;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  font-size: 11.5px; font-weight: 600; color: var(--ink-3);
+  padding: 4px; border-radius: 10px; text-decoration: none;
+  transition: background .12s ease, color .12s ease;
+}
+.bottombar button svg, .bottombar a svg { width: 21px; height: 21px; }
+.bottombar button:hover, .bottombar a:hover { background: var(--tab-hover); color: var(--ink-2); }
+.bottombar button[aria-selected="true"], .bottombar a[aria-selected="true"] { color: var(--tab-ink-on); background: var(--tab-tint); }
+.bottombar button[aria-selected="true"] svg, .bottombar a[aria-selected="true"] svg { color: var(--blue); }
+.bottombar button b, .bottombar a b { font-weight: 800; }
+@media (min-width: 768px) {
+  .bottombar {
+    left: 50%; right: auto; bottom: 18px;
+    transform: translateX(-50%);
+    width: min(540px, calc(100vw - 40px));
+    height: 60px;
+    border: 1px solid var(--rule-strong);
+    border-radius: var(--r-pill);
+    padding: 0 6px;
+    box-shadow: var(--lift-pop);
+  }
+  .bottombar button, .bottombar a { border-radius: var(--r-pill); margin: 6px 3px; }
+}
+
+.job-card {
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-lg);
+  box-shadow: var(--lift-1);
+  overflow: hidden;
+}
+.job-card + .job-card { margin-top: 14px; }
+.job-card .jc-top { padding: 15px 16px 13px; box-shadow: inset 4px 0 0 var(--blue); }
+.job-card.is-today .jc-top { box-shadow: inset 4px 0 0 var(--moss); }
+.job-card.is-done .jc-top { box-shadow: inset 4px 0 0 var(--gold); }
+.job-card .jc-name { font-size: 16px; font-weight: 700; letter-spacing: -0.012em; }
+.job-card .jc-addr { font-size: 13px; color: var(--ink-2); margin-top: 4px; }
+.job-card .jc-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 11px; }
+.job-card .jc-foot {
+  padding: 12px 16px; background: var(--panel-sunk); border-top: 1px solid var(--rule);
+  display: flex; gap: 8px; flex-wrap: wrap;
+}
+
+.scope-list { list-style: none; margin: 0; padding: 0; font-size: 13.5px; }
+.scope-list li {
+  display: flex; justify-content: space-between; gap: 12px;
+  padding: 8px 0; border-bottom: 1px dotted var(--rule);
+}
+.scope-list li:last-child { border-bottom: 0; }
+.scope-list .q { color: var(--ink-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* --- Estimate builder ---------------------------------------------------
+   The builder only splits into two columns once the modal is actually wide
+   enough to hold them, which is what the previous 980px breakpoint missed. */
+.builder { display: grid; gap: var(--gap); grid-template-columns: 1fr; }
+@media (min-width: 960px) { .builder { grid-template-columns: 1.1fr 1fr; align-items: start; } }
+
+.catalog { max-height: 400px; overflow-y: auto; border: 1px solid var(--rule); border-radius: var(--r-md); }
+.cat-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 12px; border-bottom: 1px solid var(--rule);
+}
+.cat-row:last-child { border-bottom: 0; }
+.cat-row:hover { background: var(--panel-sunk); }
+.cat-row .cn { font-size: 13.5px; font-weight: 600; }
+.cat-row .cm { font-size: 11.5px; color: var(--ink-3); margin-top: 2px; }
+.cat-row .cp { font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--ink-2); }
+
+.tierbox { border: 1px solid var(--rule); border-radius: var(--r-md); overflow: hidden; background: var(--panel); }
+.tierbox + .tierbox { margin-top: 12px; }
+.tierbox > header {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 10px 12px; background: var(--panel-sunk); border-bottom: 1px solid var(--rule);
+}
+.tierbox.good   > header { box-shadow: inset 3px 0 0 var(--slate); }
+.tierbox.better > header { box-shadow: inset 3px 0 0 var(--gold); }
+.tierbox.best   > header { box-shadow: inset 3px 0 0 var(--moss); }
+.tierbox > header .tname { font-size: 14px; font-weight: 700; letter-spacing: -0.012em; }
+.line-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) 64px 82px 26px;
+  gap: 8px; align-items: center;
+  padding: 9px 12px; border-bottom: 1px solid var(--rule);
+  font-size: 13.5px;
+}
+.line-row:last-child { border-bottom: 0; }
+.line-row .lp { text-align: right; font-variant-numeric: tabular-nums; }
+.line-row input { padding: 5px 7px; font-size: 13px; }
+/* Phones: the name gets its own row instead of being squeezed to nothing. */
+@media (max-width: 520px) {
+  .line-row { grid-template-columns: minmax(0, 1fr) 64px 26px; row-gap: 8px; }
+  .line-row > div:first-child { grid-column: 1 / -1; }
+}
+
+/* --- Sign sheet --------------------------------------------------------- */
+.signsheet {
+  border: 1px solid var(--rule-strong); border-radius: var(--r-lg);
+  background: var(--panel); overflow: hidden;
+}
+.signsheet .ss-head { padding: 16px 18px; border-bottom: 1px solid var(--rule); background: var(--panel-sunk); }
+.sign-input {
+  font-family: var(--script); font-size: 30px; font-weight: 600;
+  padding: 8px 14px; border: 0; border-bottom: 2px solid var(--rule-strong);
+  border-radius: 0; background: transparent; width: 100%;
+  color: var(--blue-700);
+}
+.sign-input:focus { outline: none; border-bottom-color: var(--blue); box-shadow: none; }
+.sign-input::placeholder { color: var(--ink-3); font-size: 23px; }
+
+/* --- Responsive tweaks -------------------------------------------------- */
+@media (min-width: 900px) {
+  .main { padding: 22px 24px 48px; }
+  .appbar { padding: 0 24px; }
+  .subnav-inner { padding: 10px 24px; }
+  .view-head h1 { font-size: 23px; }
+}
+@media print {
+  .appbar, .subnav, .bottombar, .toast-dock, .demo-banner { display: none !important; }
+}
