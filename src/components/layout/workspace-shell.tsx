@@ -8,7 +8,6 @@ import { cn } from "@/lib/utils";
 import type { Role } from "@/lib/types";
 import { AppBar } from "./app-bar";
 import { BottomNav } from "./bottom-nav";
-import { DemoBanner } from "./demo-banner";
 import { TabStrip } from "./tab-strip";
 
 interface WorkspaceShellProps {
@@ -97,10 +96,7 @@ function Shell({
           />
         ) : null}
 
-        <main className={cn("main", mainClassName)}>
-          <DemoBanner />
-          {children}
-        </main>
+        <main className={cn("main", mainClassName)}>{children}</main>
       </div>
 
       {nav === "bottom" ? (

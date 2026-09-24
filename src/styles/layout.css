@@ -172,20 +172,6 @@
 }
 .section + .section { margin-top: var(--gap); }
 
-/* --- Demo banner -------------------------------------------------------- */
-.demo-banner {
-  background: var(--panel);
-  border: 1px solid var(--rule);
-  border-left: 3px solid var(--blue);
-  border-radius: var(--r-lg);
-  padding: 12px 14px;
-  margin-bottom: var(--gap);
-  display: flex; gap: 12px; align-items: flex-start;
-  font-size: 13.5px; color: var(--ink-2);
-}
-.demo-banner strong { color: var(--ink); }
-.demo-banner .close { margin-left: auto; }
-
 /* --- Sign in ------------------------------------------------------------ */
 /* White first: a single card on a hint of blue, so the brand shows up in the
    logo, the tagline and the role accents rather than in a wall of colour. */
@@ -419,5 +405,5 @@
   .view-head h1 { font-size: 23px; }
 }
 @media print {
-  .appbar, .subnav, .bottombar, .toast-dock, .demo-banner { display: none !important; }
+  .appbar, .subnav, .bottombar, .toast-dock { display: none !important; }
 }

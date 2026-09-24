@@ -19,6 +19,20 @@ const LoginSchema = z
 
 const ABSOLUTE_COOKIE_MAX_AGE = 30 * 24 * 60 * 60; // seconds
 
+/**
+ * Cookie flags depend on how the app is reached. When it is embedded in an
+ * iframe (e.g. GoHighLevel), the browser treats it as third-party context
+ * and silently drops SameSite=Lax cookies - which made login spin forever:
+ * the session cookie was rejected, so every request looked signed out.
+ * Inside an iframe the only accepted combination is SameSite=None plus the
+ * Partitioned (CHIPS) attribute, and Secure is mandatory with SameSite=None.
+ * Outside an iframe (normal browsing, dev on http://localhost) keep Lax.
+ */
+const cookieSecurity =
+  process.env.NODE_ENV === "production"
+    ? ({ secure: true, sameSite: "none", partitioned: true } as const)
+    : ({ secure: false, sameSite: "lax" } as const);
+
 export const POST = apiRoute(async (request: NextRequest) => {
   const json = await request.json().catch(() => null);
   const parsed = LoginSchema.safeParse(json);
@@ -73,8 +87,7 @@ export const POST = apiRoute(async (request: NextRequest) => {
   const store = await cookies();
   store.set(SESSION_COOKIE, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
+    ...cookieSecurity,
     path: "/",
     maxAge: ABSOLUTE_COOKIE_MAX_AGE,
   });

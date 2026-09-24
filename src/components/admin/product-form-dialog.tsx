@@ -48,22 +48,28 @@ export function ProductFormDialog({ product, onClose }: ProductFormDialogProps) 
           label: "Save",
           variant: "primary",
           keep: true,
-          onClick: (close) => {
+          onClick: async (close) => {
             if (!name.trim()) {
               toast("Give the product a name.", "warn");
               return false;
             }
-            saveProduct.mutate([
-              {
-                id: product?.id ?? null,
-                name: name.trim(),
-                category,
-                unit,
-                tier: tier || null,
-                costPerUnit: cost,
-                pricePerUnit: price,
-              },
-            ]);
+            try {
+              await saveProduct.mutateAsync([
+                {
+                  id: product?.id ?? null,
+                  name: name.trim(),
+                  category,
+                  unit,
+                  tier: tier || null,
+                  costPerUnit: cost,
+                  pricePerUnit: price,
+                },
+              ]);
+            } catch {
+              // The mutation hook has already reported why. Stay open so the
+              // half-typed product is not thrown away.
+              return false;
+            }
             toast("Product saved.", "ok");
             close();
           },

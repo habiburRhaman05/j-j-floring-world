@@ -162,7 +162,7 @@ export function AdminOverview({ db, role }: { db: Database; role: Role }) {
         </Panel>
       </div>
 
-      <Panel className="section">
+      <Panel className="section" style={{ marginTop: 16 }}>
         <PanelHead>
           <h3>Sales rep leaderboard</h3>
           <span className="t-meta">Commission owed is revenue times rate</span>
