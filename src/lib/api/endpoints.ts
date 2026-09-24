@@ -31,27 +31,30 @@ export const endpoints = {
       get: "/api/settings/integrations/ghl",
       save: "/api/settings/integrations/ghl",
       test: "/api/settings/integrations/ghl/test",
+      leadConfig: "/api/settings/integrations/ghl/lead-config",
+      pipelines: "/api/settings/integrations/ghl/pipelines",
+      tagCheck: (tag: string) => `/api/settings/integrations/ghl/tag-check?tag=${encodeURIComponent(tag)}`,
     },
   },
 
   /** The whole workspace in one payload. */
-  workspace: "/workspace",
+  workspace: "/api/workspace",
 
   leads: {
-    list: "/leads",
-    create: "/leads",
-    detail: (leadId: string) => `/leads/${leadId}`,
-    stage: (leadId: string) => `/leads/${leadId}/stage`,
-    notes: (leadId: string) => `/leads/${leadId}/notes`,
-    appointment: (leadId: string) => `/leads/${leadId}/appointment`,
+    list: "/api/leads",
+    create: "/api/leads",
+    detail: (leadId: string) => `/api/leads/${leadId}`,
+    stage: (leadId: string) => `/api/leads/${leadId}/stage`,
+    notes: (leadId: string) => `/api/leads/${leadId}/notes`,
+    appointment: (leadId: string) => `/api/leads/${leadId}/appointment`,
   },
 
   products: {
-    list: "/products",
-    create: "/products",
-    detail: (productId: string) => `/products/${productId}`,
-    commission: (productId: string) => `/products/${productId}/commission`,
-    toggle: (productId: string) => `/products/${productId}/active`,
+    list: "/api/products",
+    create: "/api/products",
+    detail: (productId: string) => `/api/products/${productId}`,
+    commission: (productId: string) => `/api/products/${productId}/commission`,
+    toggle: (productId: string) => `/api/products/${productId}/active`,
   },
 
   users: {
@@ -63,35 +66,35 @@ export const endpoints = {
   },
 
   estimates: {
-    list: "/estimates",
-    create: "/estimates",
-    detail: (estimateId: string) => `/estimates/${estimateId}`,
-    send: (estimateId: string) => `/estimates/${estimateId}/send`,
-    viewed: (estimateId: string) => `/estimates/${estimateId}/viewed`,
-    sign: (estimateId: string) => `/estimates/${estimateId}/sign`,
+    list: "/api/estimates",
+    create: "/api/estimates",
+    detail: (estimateId: string) => `/api/estimates/${estimateId}`,
+    send: (estimateId: string) => `/api/estimates/${estimateId}/send`,
+    viewed: (estimateId: string) => `/api/estimates/${estimateId}/viewed`,
+    sign: (estimateId: string) => `/api/estimates/${estimateId}/sign`,
   },
 
   jobs: {
-    list: "/jobs",
-    detail: (jobId: string) => `/jobs/${jobId}`,
-    stage: (jobId: string) => `/jobs/${jobId}/stage`,
-    assignment: (jobId: string) => `/jobs/${jobId}/assignment`,
-    materials: (jobId: string) => `/jobs/${jobId}/materials`,
-    photos: (jobId: string) => `/jobs/${jobId}/photos`,
-    confirm: (jobId: string) => `/jobs/${jobId}/confirm`,
+    list: "/api/jobs",
+    detail: (jobId: string) => `/api/jobs/${jobId}`,
+    stage: (jobId: string) => `/api/jobs/${jobId}/stage`,
+    assignment: (jobId: string) => `/api/jobs/${jobId}/assignment`,
+    materials: (jobId: string) => `/api/jobs/${jobId}/materials`,
+    photos: (jobId: string) => `/api/jobs/${jobId}/photos`,
+    confirm: (jobId: string) => `/api/jobs/${jobId}/confirm`,
   },
 
   invoices: {
-    list: "/invoices",
-    payment: (invoiceId: string) => `/invoices/${invoiceId}/payment`,
+    list: "/api/invoices",
+    payment: (invoiceId: string) => `/api/invoices/${invoiceId}/payment`,
   },
 
   sync: {
-    log: "/sync/log",
-    simulateInbound: "/sync/simulate-inbound",
+    log: "/api/sync/log",
+    simulateInbound: "/api/sync/simulate-inbound",
   },
 
   demo: {
-    reset: "/demo/reset",
+    reset: "/api/demo/reset",
   },
 } as const;

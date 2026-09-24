@@ -1544,6 +1544,11 @@ model IntegrationCredential {
   lastVerifyError  String?
   tokenExpiresAt   DateTime?
 
+  /// Which GHL pipeline the CSR intake board reads/writes (Opportunities API).
+  leadPipelineId String?
+  /// Contact tag that marks a GHL contact as a lead the intake board should show.
+  leadTag        String? @default("fb-lead")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

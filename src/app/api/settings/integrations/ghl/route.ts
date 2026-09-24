@@ -34,6 +34,8 @@ export const GET = apiRoute(async () => {
     connectedAt: credential.connectedAt,
     lastVerifiedAt: credential.lastVerifiedAt,
     lastVerifyError: credential.lastVerifyError,
+    leadPipelineId: credential.leadPipelineId,
+    leadTag: credential.leadTag ?? "fb-lead",
   });
 });
 
@@ -41,6 +43,8 @@ const SaveSchema = z
   .object({
     locationId: z.string().min(1),
     token: z.string().min(10),
+    leadPipelineId: z.string().min(1).optional(),
+    leadTag: z.string().min(1).optional(),
   })
   .strict();
 
@@ -53,7 +57,10 @@ export const PATCH = apiRoute(async (request: NextRequest) => {
   const parsed = SaveSchema.safeParse(json);
   if (!parsed.success) return zodErrorResponse(parsed.error);
 
-  await saveGhlConnection(parsed.data.locationId, parsed.data.token, session.user.id);
+  await saveGhlConnection(parsed.data.locationId, parsed.data.token, session.user.id, {
+    leadPipelineId: parsed.data.leadPipelineId,
+    leadTag: parsed.data.leadTag,
+  });
 
   const { ipAddress, userAgent } = requestMeta(request);
   // Never write the token itself, masked or otherwise, into the audit log.

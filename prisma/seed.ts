@@ -174,54 +174,64 @@ async function main() {
   }
   console.log(`Seeded ${SYSTEM_ROLES.length} system roles.`);
 
-  // 2 - permission registry
-  const permissionByKey = new Map<string, { id: string }>();
-  for (const permission of PERMISSIONS) {
-    const row = await prisma.permission.upsert({
-      where: { key: permission.key },
-      update: {
-        resource: permission.resource,
-        action: permission.action,
-        scope: permission.scope ?? null,
-        description: permission.description,
-        isFieldLevel: permission.isFieldLevel ?? false,
-        category: permission.category,
-      },
-      create: {
-        key: permission.key,
-        resource: permission.resource,
-        action: permission.action,
-        scope: permission.scope ?? null,
-        description: permission.description,
-        isFieldLevel: permission.isFieldLevel ?? false,
-        category: permission.category,
-      },
-    });
-    permissionByKey.set(permission.key, row);
-  }
+  // 2 - permission registry (batched into one transaction instead of 84 sequential
+  // round trips - the original loop is correct but slow over a remote/serverless
+  // Postgres connection; behavior is identical, still fully idempotent)
+  const permissionByKey = new Map<string, { id: string; key: string }>();
+  const permissionRows = await prisma.$transaction(
+    PERMISSIONS.map((permission) =>
+      prisma.permission.upsert({
+        where: { key: permission.key },
+        update: {
+          resource: permission.resource,
+          action: permission.action,
+          scope: permission.scope ?? null,
+          description: permission.description,
+          isFieldLevel: permission.isFieldLevel ?? false,
+          category: permission.category,
+        },
+        create: {
+          key: permission.key,
+          resource: permission.resource,
+          action: permission.action,
+          scope: permission.scope ?? null,
+          description: permission.description,
+          isFieldLevel: permission.isFieldLevel ?? false,
+          category: permission.category,
+        },
+      }),
+    ),
+  );
+  for (const row of permissionRows) permissionByKey.set(row.key, row);
   console.log(`Seeded ${PERMISSIONS.length} permissions.`);
 
-  // 3 - default role grants: admin gets everything, others get their listed subset
+  // 3 - default role grants: admin gets everything, others get their listed subset (batched)
   const adminRole = roleByKey.get("admin")!;
-  for (const permission of permissionByKey.values()) {
-    await prisma.rolePermission.upsert({
-      where: { roleId_permissionId: { roleId: adminRole.id, permissionId: permission.id } },
-      update: {},
-      create: { roleId: adminRole.id, permissionId: permission.id },
-    });
-  }
+  await prisma.$transaction(
+    Array.from(permissionByKey.values()).map((permission) =>
+      prisma.rolePermission.upsert({
+        where: { roleId_permissionId: { roleId: adminRole.id, permissionId: permission.id } },
+        update: {},
+        create: { roleId: adminRole.id, permissionId: permission.id },
+      }),
+    ),
+  );
+  const nonAdminGrantOps = [];
   for (const [roleKey, keys] of Object.entries(NON_ADMIN_GRANTS)) {
     const role = roleByKey.get(roleKey)!;
     for (const key of keys) {
       const permission = permissionByKey.get(key);
       if (!permission) throw new Error(`Seed error: unknown permission key "${key}" for role "${roleKey}".`);
-      await prisma.rolePermission.upsert({
-        where: { roleId_permissionId: { roleId: role.id, permissionId: permission.id } },
-        update: {},
-        create: { roleId: role.id, permissionId: permission.id },
-      });
+      nonAdminGrantOps.push(
+        prisma.rolePermission.upsert({
+          where: { roleId_permissionId: { roleId: role.id, permissionId: permission.id } },
+          update: {},
+          create: { roleId: role.id, permissionId: permission.id },
+        }),
+      );
     }
   }
+  await prisma.$transaction(nonAdminGrantOps);
   console.log("Seeded default role grants.");
 
   // 4 - the first admin, from environment variables

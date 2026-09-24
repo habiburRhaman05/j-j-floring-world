@@ -426,3 +426,8 @@ table.grid th .th-sort .th-caret { font-size: 9px; line-height: 1; opacity: .9; 
 }
 .seg button:hover { color: var(--ink); }
 .seg button[aria-pressed="true"] { background: var(--tab-tint); color: var(--tab-ink-on); box-shadow: none; }
+
+/* drag-and-drop states, additive to the existing .board/.col/.tile rules */
+.col-drop-target .col-body { background: color-mix(in srgb, var(--blue) 8%, transparent); border-radius: 8px; outline: 2px dashed var(--blue); outline-offset: 2px; }
+.tile.dragging { opacity: .5; }
+.tile[draggable="true"] { cursor: grab; }
