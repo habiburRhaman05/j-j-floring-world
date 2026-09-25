@@ -40,8 +40,12 @@ export function AddPhotoDialog({ jobId, onClose }: AddPhotoDialogProps) {
         {
           label: "Attach",
           variant: "primary",
-          onClick: () => {
-            addPhoto.mutate([jobId, label, name || "photo.jpg"]);
+          onClick: async () => {
+            try {
+              await addPhoto.mutateAsync([jobId, label, name || "photo.jpg"]);
+            } catch {
+              return false;
+            }
             toast(`${label} photo attached.`, "ok");
           },
         },

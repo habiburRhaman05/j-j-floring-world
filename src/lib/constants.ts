@@ -63,7 +63,7 @@ export const PRODUCT_CATEGORIES = [
   "Labor",
 ] as const;
 
-export const UNITS = ["SF", "YD", "EA", "LF"] as const;
+export const UNITS = ["SF", "YD", "LF", "EA", "HR", "GAL", "BOX"] as const;
 export const TIERS = ["Good", "Better", "Best"] as const;
 export const LEAD_SOURCES = ["Facebook Ads", "Website Form", "Other"] as const;
 

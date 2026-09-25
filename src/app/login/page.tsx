@@ -1,21 +1,45 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useState, type FormEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState, type FormEvent } from "react";
 import { useSession } from "@/components/providers/session-provider";
 import { useToast } from "@/components/providers/toast-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/ui/label";
+import { apiGet } from "@/lib/api/client";
+import { endpoints } from "@/lib/api/endpoints";
 import { toApiError, type ApiError } from "@/lib/api/errors";
+import type { SetupStatusResponse } from "@/lib/setup/types";
 import { ROLE_HOME } from "@/lib/auth/auth-service";
+
+/** Why a GHL custom-menu auto-login bounced here (see /api/auth/ghl/...). */
+const AUTO_LOGIN_ERRORS: Record<string, string> = {
+  ghl_link_invalid: "That GoHighLevel link is not set up correctly. Ask an admin to check the custom menu link.",
+  ghl_link_key: "That GoHighLevel link is missing its key or the key is wrong. Ask an admin to check the custom menu link.",
+  ghl_not_connected: "The app is not connected to GoHighLevel yet. An admin needs to finish setup.",
+  ghl_unreachable: "GoHighLevel could not be reached to confirm who you are. Try again, or sign in below.",
+  ghl_user_invalid: "GoHighLevel does not recognise that user for this business.",
+  ghl_user_not_in_app: "Your GoHighLevel user has not been given access to this app. Ask an admin.",
+  ghl_wrong_role: "Your account has a different role in this app, so that link cannot open this dashboard. Sign in below.",
+  account_inactive: "Your account is not active. Contact an administrator.",
+};
 
 /**
  * The one sign-in for the whole app. No role picker: the role is a property
  * of the account, so the credentials decide which workspace opens.
  */
 export default function LoginPage() {
+  // useSearchParams (the auto-login error) needs a Suspense boundary to prerender.
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
   const { session, loading, signIn } = useSession();
   const { toast } = useToast();
   const router = useRouter();
@@ -24,6 +48,14 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
+  const [setupOpen, setSetupOpen] = useState(false);
+  const autoLoginError = AUTO_LOGIN_ERRORS[useSearchParams().get("error") ?? ""] ?? null;
+
+  useEffect(() => {
+    apiGet<SetupStatusResponse>(endpoints.setup.status)
+      .then((status) => setSetupOpen(!status.completed))
+      .catch(() => setSetupOpen(false));
+  }, []);
 
   // Already signed in? Go straight to your workspace.
   useEffect(() => {
@@ -78,9 +110,9 @@ export default function LoginPage() {
           </p>
 
           <form className="login-form" onSubmit={onSubmit} noValidate>
-            {generalError ? (
+            {generalError || autoLoginError ? (
               <div className="login-alert" role="alert">
-                {generalError}
+                {generalError ?? autoLoginError}
               </div>
             ) : null}
 
@@ -114,8 +146,8 @@ export default function LoginPage() {
               {passwordError ? <span className="field-err">{passwordError}</span> : null}
             </Field>
 
-            <Button type="submit" variant="primary" size="lg" block disabled={pending}>
-              {pending ? "Signing in" : "Sign in"}
+            <Button type="submit" variant="primary" size="lg" block loading={pending}>
+              {pending ? "Signing in…" : "Sign in"}
             </Button>
           </form>
 
@@ -123,6 +155,11 @@ export default function LoginPage() {
             <Link href="/forgot-password" className="t-meta">
               Forgot your password?
             </Link>
+            {setupOpen ? (
+              <Link href="/setup" className="t-meta" style={{ marginLeft: 16 }}>
+                First time here? Run setup
+              </Link>
+            ) : null}
           </div>
         </div>
       </main>

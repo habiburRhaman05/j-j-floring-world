@@ -34,6 +34,8 @@ export const buttonVariants = cva("btn", {
 interface ButtonProps extends ComponentProps<"button">, VariantProps<typeof buttonVariants> {
   /** Render the child element instead of a <button>, e.g. an <a>. */
   asChild?: boolean;
+  /** Request in flight: shows a spinner and blocks further clicks. */
+  loading?: boolean;
 }
 
 export function Button({
@@ -42,15 +44,29 @@ export function Button({
   size,
   block,
   asChild = false,
+  loading = false,
   type,
+  disabled,
+  children,
   ...props
 }: ButtonProps) {
-  const Comp = asChild ? Slot : "button";
+  if (asChild) {
+    return (
+      <Slot className={cn(buttonVariants({ variant, size, block }), className)} {...props}>
+        {children}
+      </Slot>
+    );
+  }
   return (
-    <Comp
-      className={cn(buttonVariants({ variant, size, block }), className)}
-      {...(asChild ? {} : { type: type ?? "button" })}
+    <button
+      className={cn(buttonVariants({ variant, size, block }), loading && "is-loading", className)}
+      type={type ?? "button"}
+      disabled={disabled || loading}
+      aria-busy={loading || undefined}
       {...props}
-    />
+    >
+      {loading ? <span className="btn-spinner" aria-hidden="true" /> : null}
+      {children}
+    </button>
   );
 }

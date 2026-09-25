@@ -22,13 +22,23 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // =============================================================================
 // ENUMS
 // =============================================================================
+
+/// The user's role in this application. Mirrors the Role/UserRole rows (same
+/// keys), kept on the user so it reads as one field next to ghlRole.
+enum AppRole {
+  admin
+  sales_rep
+  csr
+  installer
+}
 
 enum UserStatus {
   INVITED
@@ -314,71 +324,76 @@ enum NotificationChannel {
 /// Base user. Holds only what every human in the system has. Role-specific
 /// attributes hang off UserProfile or the role tables, never off here.
 model User {
-  id           String     @id @default(cuid())
-  email        String     @unique
-  emailVerifiedAt DateTime?
-  passwordHash String? // null while INVITED
-  firstName    String
-  lastName     String
-  phone        String?
-  avatarFileId String?
-  status       UserStatus @default(INVITED)
-  timezone     String     @default("America/New_York")
-  mustChangePassword Boolean @default(false)
+  id                 String     @id @default(cuid())
+  email              String     @unique
+  emailVerifiedAt    DateTime?
+  passwordHash       String? // null while INVITED
+  firstName          String
+  lastName           String
+  phone              String?
+  avatarFileId       String?
+  status             UserStatus @default(INVITED)
+  timezone           String     @default("America/New_York")
+  mustChangePassword Boolean    @default(false)
 
   // Two-factor. Mandatory for anyone holding the Admin role (FR-SYS-09).
-  totpSecret        String? // encrypted at rest
-  totpEnabledAt     DateTime?
-  backupCodes       Json? // hashed
+  totpSecret    String? // encrypted at rest
+  totpEnabledAt DateTime?
+  backupCodes   Json? // hashed
 
   // Capacity inputs for AUTO_LOAD_BALANCED assignment (FR-ADM-27)
-  maxOpenLeads   Int?
-  workingHours   Json? // { mon: ["08:00","17:00"], ... }
+  maxOpenLeads Int?
+  workingHours Json? // { mon: ["08:00","17:00"], ... }
 
-  lastLoginAt  DateTime?
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-  deletedAt    DateTime?
+  lastLoginAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
 
   // GHL user mirror, so appointments can land on the right GHL calendar
-  ghlUserId     String? @unique
+  ghlUserId     String?  @unique
   ghlCalendarId String?
+  /// Role in GoHighLevel as "<type>:<role>", e.g. "account:admin", "account:user"
+  ghlRole       String?
+  /// Role in this application, chosen by the admin during setup
+  role          AppRole?
 
-  roles                UserRole[]
-  permissionOverrides  UserPermissionOverride[]
-  sessions             Session[]
-  accounts             Account[]
-  passwordResets       PasswordResetToken[]
+  roles               UserRole[]
+  permissionOverrides UserPermissionOverride[]
+  sessions            Session[]
+  refreshTokens       RefreshToken[]
+  accounts            Account[]
+  passwordResets      PasswordResetToken[]
 
-  avatar               FileAsset? @relation("UserAvatar", fields: [avatarFileId], references: [id])
+  avatar FileAsset? @relation("UserAvatar", fields: [avatarFileId], references: [id])
 
-  assignedLeads        Lead[]                  @relation("LeadAssignedRep")
-  assignmentsReceived  LeadAssignment[]        @relation("AssignmentAssignee")
-  assignmentsMade      LeadAssignment[]        @relation("AssignmentActor")
-  leadNotes            LeadNote[]
-  activities           LeadActivity[]
-  appointmentsOwned    Appointment[]           @relation("AppointmentOwner")
-  appointmentsBooked   Appointment[]           @relation("AppointmentBooker")
-  estimates            Estimate[]              @relation("EstimateRep")
-  installerJobs        Job[]                   @relation("JobInstaller")
-  jobStageChanges      JobStageHistory[]
-  jobPhotos            JobPhoto[]
-  jobIssuesReported    JobIssue[]              @relation("IssueReporter")
-  jobIssuesResolved    JobIssue[]              @relation("IssueResolver")
-  commissionLedger     CommissionLedger[]
-  commissionRules      CommissionRule[]
-  payoutsCreated       Payout[]                @relation("PayoutCreator")
-  payoutsApproved      Payout[]                @relation("PayoutApprover")
-  payoutLines          PayoutLine[]
-  auditLogs            AuditLog[]
-  invitationsSent      UserInvitation[]        @relation("InvitationSender")
-  crewMemberships      CrewMember[]
-  crewsLed             Crew[]                  @relation("CrewLead")
-  notifications        Notification[]
-  notificationPrefs    NotificationPreference[]
-  priceChanges         ProductPriceHistory[]
-  uploadedFiles        FileAsset[]             @relation("FileUploader")
-  paymentsRecorded     Payment[]               @relation("PaymentRecorder")
+  assignedLeads       Lead[]                   @relation("LeadAssignedRep")
+  assignmentsReceived LeadAssignment[]         @relation("AssignmentAssignee")
+  assignmentsMade     LeadAssignment[]         @relation("AssignmentActor")
+  leadNotes           LeadNote[]
+  activities          LeadActivity[]
+  appointmentsOwned   Appointment[]            @relation("AppointmentOwner")
+  appointmentsBooked  Appointment[]            @relation("AppointmentBooker")
+  estimates           Estimate[]               @relation("EstimateRep")
+  installerJobs       Job[]                    @relation("JobInstaller")
+  jobStageChanges     JobStageHistory[]
+  jobPhotos           JobPhoto[]
+  jobIssuesReported   JobIssue[]               @relation("IssueReporter")
+  jobIssuesResolved   JobIssue[]               @relation("IssueResolver")
+  commissionLedger    CommissionLedger[]
+  commissionRules     CommissionRule[]
+  payoutsCreated      Payout[]                 @relation("PayoutCreator")
+  payoutsApproved     Payout[]                 @relation("PayoutApprover")
+  payoutLines         PayoutLine[]
+  auditLogs           AuditLog[]
+  invitationsSent     UserInvitation[]         @relation("InvitationSender")
+  crewMemberships     CrewMember[]
+  crewsLed            Crew[]                   @relation("CrewLead")
+  notifications       Notification[]
+  notificationPrefs   NotificationPreference[]
+  priceChanges        ProductPriceHistory[]
+  uploadedFiles       FileAsset[]              @relation("FileUploader")
+  paymentsRecorded    Payment[]                @relation("PaymentRecorder")
 
   @@index([status])
   @@index([deletedAt])
@@ -388,22 +403,22 @@ model User {
 /// A role is a named bundle of permissions. System roles cannot be deleted.
 /// Admins may create custom roles (FR-ADM-22) without a code change.
 model Role {
-  id          String  @id @default(cuid())
-  key         String  @unique // "admin", "sales_rep", "csr", "installer", or custom
-  name        String
-  description String?
-  isSystem    Boolean @default(false)
+  id           String  @id @default(cuid())
+  key          String  @unique // "admin", "sales_rep", "csr", "installer", or custom
+  name         String
+  description  String?
+  isSystem     Boolean @default(false)
   /// Data scope this role sees by default: "all" | "team" | "own"
-  defaultScope String @default("own")
-  sortOrder   Int     @default(100)
+  defaultScope String  @default("own")
+  sortOrder    Int     @default(100)
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  permissions RolePermission[]
-  users       UserRole[]
-  invitations UserInvitation[]
+  permissions     RolePermission[]
+  users           UserRole[]
+  invitations     UserInvitation[]
   commissionRules CommissionRule[]
 
   @@map("roles")
@@ -413,16 +428,16 @@ model Role {
 /// capability is added. Keys are dot-namespaced: "<resource>.<action>[.<scope>]"
 /// e.g. product.cost.read, lead.read.own, estimate.approve.discount
 model Permission {
-  id          String  @id @default(cuid())
-  key         String  @unique
-  resource    String // "product", "lead", "estimate"
-  action      String // "read", "create", "update", "delete", "approve"
-  scope       String? // "own", "team", "all", or a field name for field-level keys
-  description String
+  id           String  @id @default(cuid())
+  key          String  @unique
+  resource     String // "product", "lead", "estimate"
+  action       String // "read", "create", "update", "delete", "approve"
+  scope        String? // "own", "team", "all", or a field name for field-level keys
+  description  String
   /// Field-level permissions gate individual response fields rather than routes.
   isFieldLevel Boolean @default(false)
   /// Grouping for the permission matrix UI
-  category    String
+  category     String
 
   createdAt DateTime @default(now())
 
@@ -492,15 +507,15 @@ model UserPermissionOverride {
 }
 
 model UserInvitation {
-  id           String    @id @default(cuid())
-  email        String
-  tokenHash    String    @unique
-  roleId       String
-  invitedById  String
-  expiresAt    DateTime
-  acceptedAt   DateTime?
-  revokedAt    DateTime?
-  createdAt    DateTime  @default(now())
+  id          String    @id @default(cuid())
+  email       String
+  tokenHash   String    @unique
+  roleId      String
+  invitedById String
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
 
   role      Role @relation(fields: [roleId], references: [id])
   invitedBy User @relation("InvitationSender", fields: [invitedById], references: [id])
@@ -518,6 +533,10 @@ model Session {
   expires      DateTime
   /// Which role the user is currently acting as, when they hold several
   activeRoleId String?
+  /// The refresh-token family this access session was issued from
+  familyId     String?
+  /// "password" or "ghl"
+  authMethod   String   @default("password")
   ipAddress    String?
   userAgent    String?
   createdAt    DateTime @default(now())
@@ -525,7 +544,33 @@ model Session {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([familyId])
   @@map("sessions")
+}
+
+/// Rotating refresh tokens. Each use marks the row used and issues a successor
+/// in the same family; presenting an already-used token outside the short
+/// grace window is treated as theft and revokes the whole family.
+model RefreshToken {
+  id              String    @id @default(cuid())
+  tokenHash       String    @unique
+  familyId        String
+  userId          String
+  /// When the family's first login happened - caps how long rotation can extend it
+  familyStartedAt DateTime
+  authMethod      String    @default("password")
+  expiresAt       DateTime
+  usedAt          DateTime?
+  revokedAt       DateTime?
+  ipAddress       String?
+  userAgent       String?
+  createdAt       DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([familyId])
+  @@index([userId])
+  @@map("refresh_tokens")
 }
 
 model Account {
@@ -594,18 +639,18 @@ model CrewMember {
 
 /// Immutable audit trail (FR-SYS-03). Append only. Never updated or deleted.
 model AuditLog {
-  id        String   @id @default(cuid())
-  actorId   String?
-  action    String // "estimate.sign", "product.update", "user.suspend"
-  entity    String // model name
-  entityId  String
-  before    Json?
-  after     Json?
-  ipAddress String?
-  userAgent String?
+  id         String   @id @default(cuid())
+  actorId    String?
+  action     String // "estimate.sign", "product.update", "user.suspend"
+  entity     String // model name
+  entityId   String
+  before     Json?
+  after      Json?
+  ipAddress  String?
+  userAgent  String?
   /// Set when the change originated from a GHL webhook rather than a human
   syncSource String?
-  createdAt DateTime @default(now())
+  createdAt  DateTime @default(now())
 
   actor User? @relation(fields: [actorId], references: [id])
 
@@ -626,7 +671,7 @@ model Lead {
   id String @id @default(cuid())
 
   // --- GHL-owned identity (pull only) ---
-  ghlContactId String? @unique
+  ghlContactId String?  @unique
   firstName    String
   lastName     String
   email        String?
@@ -636,7 +681,7 @@ model Lead {
   city         String?
   state        String?
   postalCode   String?
-  country      String  @default("US")
+  country      String   @default("US")
   ghlTags      String[] @default([])
 
   // --- App-owned ---
@@ -664,7 +709,7 @@ model Lead {
   updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  assignedRep  User?             @relation("LeadAssignedRep", fields: [assignedRepId], references: [id])
+  assignedRep  User?            @relation("LeadAssignedRep", fields: [assignedRepId], references: [id])
   assignments  LeadAssignment[]
   notes        LeadNote[]
   activities   LeadActivity[]
@@ -685,16 +730,16 @@ model Lead {
 /// latest assignedAt and no unassignedAt. Lead.assignedRepId is a denormalised
 /// convenience column kept in sync inside the same transaction.
 model LeadAssignment {
-  id           String             @id @default(cuid())
-  leadId       String
-  assignedToId String
-  assignedById String? // null when the system assigned automatically
-  strategy     AssignmentStrategy
-  reason       String?
+  id              String             @id @default(cuid())
+  leadId          String
+  assignedToId    String
+  assignedById    String? // null when the system assigned automatically
+  strategy        AssignmentStrategy
+  reason          String?
   /// Snapshot of why the auto-strategy picked this rep, for debuggability
   strategyContext Json?
-  assignedAt   DateTime           @default(now())
-  unassignedAt DateTime?
+  assignedAt      DateTime           @default(now())
+  unassignedAt    DateTime?
 
   lead       Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
   assignedTo User  @relation("AssignmentAssignee", fields: [assignedToId], references: [id])
@@ -708,19 +753,19 @@ model LeadAssignment {
 /// Rules driving the automatic fallback strategy (doc 06).
 /// Evaluated in priority order; first match wins.
 model AssignmentRule {
-  id          String             @id @default(cuid())
-  name        String
-  priority    Int // lower runs first
-  active      Boolean            @default(true)
-  strategy    AssignmentStrategy
+  id            String             @id @default(cuid())
+  name          String
+  priority      Int // lower runs first
+  active        Boolean            @default(true)
+  strategy      AssignmentStrategy
   /// Match criteria, all must match:
   /// { "sources": ["FACEBOOK_ADS"], "postalCodes": ["28202","28203"],
   ///   "estimatedValueMin": 5000, "businessHoursOnly": true }
-  criteria    Json
+  criteria      Json
   /// For AUTO_TERRITORY / explicit targeting
-  targetUserIds String[] @default([])
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
+  targetUserIds String[]           @default([])
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
 
   @@index([active, priority])
   @@map("assignment_rules")
@@ -739,15 +784,15 @@ model Territory {
 }
 
 model LeadNote {
-  id        String   @id @default(cuid())
-  leadId    String
-  authorId  String
-  body      String
+  id         String   @id @default(cuid())
+  leadId     String
+  authorId   String
+  body       String
   /// Internal notes are never pushed to GHL; customer-visible ones are
-  isInternal Boolean @default(false)
-  ghlNoteId String?  @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  isInternal Boolean  @default(false)
+  ghlNoteId  String?  @unique
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   lead   Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
   author User @relation(fields: [authorId], references: [id])
@@ -759,18 +804,18 @@ model LeadNote {
 /// Structured activity log: calls, texts, visits, stage changes.
 /// Distinct from LeadNote, which is free text.
 model LeadActivity {
-  id          String           @id @default(cuid())
-  leadId      String
-  actorId     String?
-  type        ActivityType
-  outcome     ActivityOutcome?
-  subject     String?
-  body        String?
-  durationSec Int?
+  id           String           @id @default(cuid())
+  leadId       String
+  actorId      String?
+  type         ActivityType
+  outcome      ActivityOutcome?
+  subject      String?
+  body         String?
+  durationSec  Int?
   /// For activities mirrored from a GHL conversation
-  ghlMessageId String? @unique
-  occurredAt  DateTime         @default(now())
-  createdAt   DateTime         @default(now())
+  ghlMessageId String?          @unique
+  occurredAt   DateTime         @default(now())
+  createdAt    DateTime         @default(now())
 
   lead  Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
   actor User? @relation(fields: [actorId], references: [id])
@@ -803,8 +848,8 @@ model Appointment {
   /// Set when this appointment was created by the customer via a GHL booking link
   selfBooked Boolean           @default(false)
 
-  cancelledAt    DateTime?
-  cancelReason   String?
+  cancelledAt       DateTime?
+  cancelReason      String?
   rescheduledFromId String?
 
   createdAt DateTime @default(now())
@@ -840,15 +885,15 @@ model ProductCategory {
 }
 
 model Supplier {
-  id          String    @id @default(cuid())
-  name        String
-  contactName String?
-  phone       String?
-  email       String?
+  id           String    @id @default(cuid())
+  name         String
+  contactName  String?
+  phone        String?
+  email        String?
   leadTimeDays Int?
-  active      Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  deletedAt   DateTime?
+  active       Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  deletedAt    DateTime?
 
   products Product[]
 
@@ -856,13 +901,13 @@ model Supplier {
 }
 
 model Product {
-  id         String        @id @default(cuid())
-  sku        String?       @unique
-  name       String
+  id          String        @id @default(cuid())
+  sku         String?       @unique
+  name        String
   description String?
-  categoryId String
-  supplierId String?
-  unit       UnitOfMeasure
+  categoryId  String
+  supplierId  String?
+  unit        UnitOfMeasure
 
   /// Cost is gated by the product.cost.read permission at the API layer.
   costPerUnit  Decimal @db.Decimal(14, 4)
@@ -920,15 +965,15 @@ model Estimate {
   leadId String
   repId  String
 
-  status  EstimateStatus @default(DRAFT)
-  version Int            @default(1)
+  status         EstimateStatus @default(DRAFT)
+  version        Int            @default(1)
   /// When a revision is sent, the previous estimate is SUPERSEDED and points here
-  supersededById String?  @unique
+  supersededById String?        @unique
 
   /// Which tier the customer accepted. Null until signed.
   acceptedTier   TierLevel?
-  depositPercent Decimal    @db.Decimal(5, 2) @default(30.00)
-  taxRate        Decimal    @db.Decimal(6, 4) @default(0)
+  depositPercent Decimal    @default(30.00) @db.Decimal(5, 2)
+  taxRate        Decimal    @default(0) @db.Decimal(6, 4)
   validUntil     DateTime?
   customerNotes  String? // appears on the proposal
   internalNotes  String? // never leaves the app
@@ -973,16 +1018,16 @@ model EstimateTier {
   label      String? // override the default "Good"/"Better"/"Best" wording
   summary    String?
 
-  discountPercent Decimal? @db.Decimal(5, 2)
-  discountAmount  Decimal? @db.Decimal(14, 2)
-  discountReason  String?
+  discountPercent      Decimal? @db.Decimal(5, 2)
+  discountAmount       Decimal? @db.Decimal(14, 2)
+  discountReason       String?
   discountApprovedById String?
 
   // Snapshots, all derived. Margin is computed, not entered.
-  subtotalPrice Decimal @db.Decimal(14, 2) @default(0)
-  subtotalCost  Decimal @db.Decimal(14, 2) @default(0)
-  taxAmount     Decimal @db.Decimal(14, 2) @default(0)
-  totalPrice    Decimal @db.Decimal(14, 2) @default(0)
+  subtotalPrice Decimal @default(0) @db.Decimal(14, 2)
+  subtotalCost  Decimal @default(0) @db.Decimal(14, 2)
+  taxAmount     Decimal @default(0) @db.Decimal(14, 2)
+  totalPrice    Decimal @default(0) @db.Decimal(14, 2)
 
   sortOrder Int @default(0)
 
@@ -997,8 +1042,8 @@ model EstimateTier {
 /// copied from the product at the moment the line is added and never change,
 /// so a price-book edit next year cannot rewrite last year's margin.
 model EstimateLineItem {
-  id     String @id @default(cuid())
-  tierId String
+  id        String  @id @default(cuid())
+  tierId    String
   productId String?
 
   /// Denormalised so the line survives a product being renamed or deactivated
@@ -1048,34 +1093,34 @@ model Job {
   number String @unique // "JOB-2026-0088"
 
   leadId     String
-  estimateId String @unique
+  estimateId String    @unique
   /// Which tier was sold, copied at creation
   soldTier   TierLevel
 
   stage JobStage @default(DEPOSIT_PAID)
 
-  installerId String?
-  crewId      String?
-  scheduledDate DateTime?
-  arrivalWindowStart DateTime?
-  arrivalWindowEnd   DateTime?
-  estimatedDurationHours Decimal? @db.Decimal(6, 2)
+  installerId            String?
+  crewId                 String?
+  scheduledDate          DateTime?
+  arrivalWindowStart     DateTime?
+  arrivalWindowEnd       DateTime?
+  estimatedDurationHours Decimal?  @db.Decimal(6, 2)
 
   /// Denormalised from the lead so an address correction after the fact does
   /// not silently move a historical job
-  siteAddressLine1 String?
-  siteCity         String?
-  siteState        String?
-  sitePostalCode   String?
-  accessNotes      String? // gate code, dog, parking
+  siteAddressLine1    String?
+  siteCity            String?
+  siteState           String?
+  sitePostalCode      String?
+  accessNotes         String? // gate code, dog, parking
   specialInstructions String?
 
   materialsReceived   Boolean   @default(false)
   materialsReceivedAt DateTime?
 
-  enRouteAt    DateTime?
-  startedAt    DateTime?
-  completedAt  DateTime?
+  enRouteAt          DateTime?
+  startedAt          DateTime?
+  completedAt        DateTime?
   /// Office confirmation. Commission cannot become EARNED before this is set.
   adminConfirmedAt   DateTime?
   adminConfirmedById String?
@@ -1085,16 +1130,16 @@ model Job {
   completionSignoffName String?
   completionSignoffAt   DateTime?
 
-  cancelledAt   DateTime?
-  cancelReason  String?
+  cancelledAt  DateTime?
+  cancelReason String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  lead           Lead              @relation(fields: [leadId], references: [id])
-  estimate       Estimate          @relation(fields: [estimateId], references: [id])
-  installer      User?             @relation("JobInstaller", fields: [installerId], references: [id])
-  crew           Crew?             @relation(fields: [crewId], references: [id])
+  lead           Lead               @relation(fields: [leadId], references: [id])
+  estimate       Estimate           @relation(fields: [estimateId], references: [id])
+  installer      User?              @relation("JobInstaller", fields: [installerId], references: [id])
+  crew           Crew?              @relation(fields: [crewId], references: [id])
   stageHistory   JobStageHistory[]
   photos         JobPhoto[]
   issues         JobIssue[]
@@ -1111,15 +1156,15 @@ model Job {
 }
 
 model JobStageHistory {
-  id        String   @id @default(cuid())
-  jobId     String
-  fromStage JobStage?
-  toStage   JobStage
-  actorId   String?
-  reason    String?
+  id         String    @id @default(cuid())
+  jobId      String
+  fromStage  JobStage?
+  toStage    JobStage
+  actorId    String?
+  reason     String?
   /// True when the change came from the installer's offline queue
-  wasQueued Boolean  @default(false)
-  occurredAt DateTime @default(now())
+  wasQueued  Boolean   @default(false)
+  occurredAt DateTime  @default(now())
 
   job   Job   @relation(fields: [jobId], references: [id], onDelete: Cascade)
   actor User? @relation(fields: [actorId], references: [id])
@@ -1129,15 +1174,15 @@ model JobStageHistory {
 }
 
 model JobPhoto {
-  id         String       @id @default(cuid())
-  jobId      String
-  fileId     String
-  type       JobPhotoType
-  caption    String?
+  id           String       @id @default(cuid())
+  jobId        String
+  fileId       String
+  type         JobPhotoType
+  caption      String?
   uploadedById String
   /// Client capture time, which can differ from upload time when offline
-  capturedAt DateTime?
-  createdAt  DateTime     @default(now())
+  capturedAt   DateTime?
+  createdAt    DateTime     @default(now())
 
   job        Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
   file       FileAsset @relation(fields: [fileId], references: [id])
@@ -1148,18 +1193,18 @@ model JobPhoto {
 }
 
 model JobIssue {
-  id          String           @id @default(cuid())
-  jobId       String
+  id           String           @id @default(cuid())
+  jobId        String
   reportedById String
-  severity    JobIssueSeverity @default(MEDIUM)
-  status      JobIssueStatus   @default(OPEN)
-  title       String
-  body        String
+  severity     JobIssueSeverity @default(MEDIUM)
+  status       JobIssueStatus   @default(OPEN)
+  title        String
+  body         String
   resolvedById String?
-  resolvedAt  DateTime?
-  resolution  String?
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
+  resolvedAt   DateTime?
+  resolution   String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
 
   job        Job   @relation(fields: [jobId], references: [id], onDelete: Cascade)
   reportedBy User  @relation("IssueReporter", fields: [reportedById], references: [id])
@@ -1182,14 +1227,14 @@ model JobChecklistTemplate {
 }
 
 model JobChecklistItem {
-  id         String    @id @default(cuid())
-  jobId      String
-  label      String
-  required   Boolean   @default(false)
-  sortOrder  Int       @default(0)
-  completedAt DateTime?
+  id            String    @id @default(cuid())
+  jobId         String
+  label         String
+  required      Boolean   @default(false)
+  sortOrder     Int       @default(0)
+  completedAt   DateTime?
   completedById String?
-  note       String?
+  note          String?
 
   job Job @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
@@ -1220,13 +1265,13 @@ model MaterialOrder {
 }
 
 model MaterialOrderLine {
-  id        String        @id @default(cuid())
-  orderId   String
-  productId String?
-  name      String
-  unit      UnitOfMeasure
-  quantityOrdered  Decimal @db.Decimal(14, 4)
-  quantityReceived Decimal @db.Decimal(14, 4) @default(0)
+  id               String        @id @default(cuid())
+  orderId          String
+  productId        String?
+  name             String
+  unit             UnitOfMeasure
+  quantityOrdered  Decimal       @db.Decimal(14, 4)
+  quantityReceived Decimal       @default(0) @db.Decimal(14, 4)
 
   order   MaterialOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product Product?      @relation(fields: [productId], references: [id])
@@ -1251,34 +1296,34 @@ model Invoice {
   jobId      String?
   estimateId String?
 
-  ghlInvoiceId String? @unique
+  ghlInvoiceId  String? @unique
   ghlInvoiceUrl String?
 
   status InvoiceStatus @default(DRAFT)
 
   /// Price side, mirrored from GHL
-  subtotal   Decimal @db.Decimal(14, 2)
-  taxAmount  Decimal @db.Decimal(14, 2) @default(0)
-  discountAmount Decimal @db.Decimal(14, 2) @default(0)
-  total      Decimal @db.Decimal(14, 2)
-  amountPaid Decimal @db.Decimal(14, 2) @default(0)
-  amountDue  Decimal @db.Decimal(14, 2)
+  subtotal       Decimal @db.Decimal(14, 2)
+  taxAmount      Decimal @default(0) @db.Decimal(14, 2)
+  discountAmount Decimal @default(0) @db.Decimal(14, 2)
+  total          Decimal @db.Decimal(14, 2)
+  amountPaid     Decimal @default(0) @db.Decimal(14, 2)
+  amountDue      Decimal @db.Decimal(14, 2)
 
   /// Cost side, ours alone. GHL never sees these. Snapshotted at issue time
   /// so margin on a historical invoice is immune to price-book edits.
-  snapshotCost Decimal @db.Decimal(14, 2) @default(0)
+  snapshotCost Decimal @default(0) @db.Decimal(14, 2)
 
-  depositPercent Decimal  @db.Decimal(5, 2) @default(30.00)
-  depositAmount  Decimal  @db.Decimal(14, 2) @default(0)
-  isDeposit      Boolean  @default(false)
+  depositPercent  Decimal @default(30.00) @db.Decimal(5, 2)
+  depositAmount   Decimal @default(0) @db.Decimal(14, 2)
+  isDeposit       Boolean @default(false)
   /// Supplementary invoice raised by a change order (FR-ADM-35)
-  isChangeOrder  Boolean  @default(false)
+  isChangeOrder   Boolean @default(false)
   parentInvoiceId String?
 
-  issuedAt DateTime?
-  dueAt    DateTime?
-  paidAt   DateTime?
-  voidedAt DateTime?
+  issuedAt   DateTime?
+  dueAt      DateTime?
+  paidAt     DateTime?
+  voidedAt   DateTime?
   voidReason String?
 
   /// Last time the sync worker reconciled this row against GHL
@@ -1307,12 +1352,12 @@ model InvoiceLineItem {
 
   name      String
   unit      UnitOfMeasure
-  quantity  Decimal @db.Decimal(14, 4)
-  unitPrice Decimal @db.Decimal(14, 4)
+  quantity  Decimal       @db.Decimal(14, 4)
+  unitPrice Decimal       @db.Decimal(14, 4)
   /// Snapshot, app-only, never transmitted to GHL
-  unitCost  Decimal @db.Decimal(14, 4)
-  taxable   Boolean @default(true)
-  sortOrder Int     @default(0)
+  unitCost  Decimal       @db.Decimal(14, 4)
+  taxable   Boolean       @default(true)
+  sortOrder Int           @default(0)
 
   invoice Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   product Product? @relation(fields: [productId], references: [id])
@@ -1329,18 +1374,18 @@ model Payment {
 
   ghlTransactionId String? @unique
 
-  amount   Decimal       @db.Decimal(14, 2)
-  method   PaymentMethod
-  status   PaymentStatus @default(PENDING)
+  amount    Decimal       @db.Decimal(14, 2)
+  method    PaymentMethod
+  status    PaymentStatus @default(PENDING)
   /// Last four of the card, check number, or similar. Never a full instrument.
   reference String?
   note      String?
 
   /// True when a human recorded it here rather than the customer paying online
-  isOffline      Boolean @default(false)
-  recordedById   String?
+  isOffline    Boolean @default(false)
+  recordedById String?
 
-  refundedAmount Decimal  @db.Decimal(14, 2) @default(0)
+  refundedAmount Decimal   @default(0) @db.Decimal(14, 2)
   refundedAt     DateTime?
 
   receivedAt DateTime @default(now())
@@ -1363,7 +1408,7 @@ model Payment {
 /// Overlapping effective windows for the same target are rejected by a check
 /// in application code; Postgres exclusion constraints can enforce it later.
 model CommissionRule {
-  id     String @id @default(cuid())
+  id     String  @id @default(cuid())
   name   String
   userId String?
   roleId String?
@@ -1379,7 +1424,7 @@ model CommissionRule {
   /// [{"minMarginPercent":0,"maxMarginPercent":30,"ratePercent":0.03},
   ///  {"minMarginPercent":30,"maxMarginPercent":45,"ratePercent":0.06},
   ///  {"minMarginPercent":45,"maxMarginPercent":null,"ratePercent":0.09}]
-  tiers Json?
+  tiers       Json?
 
   effectiveFrom DateTime
   effectiveTo   DateTime?
@@ -1402,24 +1447,24 @@ model CommissionRule {
 /// updates, but amounts are never edited. A correction is a new CLAWED_BACK
 /// row plus a new ACCRUED row, so the ledger always reconciles.
 model CommissionLedger {
-  id     String @id @default(cuid())
+  id     String  @id @default(cuid())
   userId String
   jobId  String
   ruleId String?
 
-  basis        CommissionBasis
+  basis       CommissionBasis
   /// The figure the percentage was applied to
-  basisAmount  Decimal          @db.Decimal(14, 2)
-  ratePercent  Decimal?         @db.Decimal(6, 4)
-  amount       Decimal          @db.Decimal(14, 2)
-  status       CommissionStatus @default(ACCRUED)
+  basisAmount Decimal          @db.Decimal(14, 2)
+  ratePercent Decimal?         @db.Decimal(6, 4)
+  amount      Decimal          @db.Decimal(14, 2)
+  status      CommissionStatus @default(ACCRUED)
 
-  accruedAt   DateTime  @default(now())
-  earnedAt    DateTime?
-  approvedAt  DateTime?
-  approvedById String?
-  paidAt      DateTime?
-  clawedBackAt DateTime?
+  accruedAt      DateTime  @default(now())
+  earnedAt       DateTime?
+  approvedAt     DateTime?
+  approvedById   String?
+  paidAt         DateTime?
+  clawedBackAt   DateTime?
   clawbackReason String?
 
   payoutLineId String?
@@ -1446,7 +1491,7 @@ model Payout {
 
   periodStart DateTime
   periodEnd   DateTime
-  totalAmount Decimal  @db.Decimal(14, 2) @default(0)
+  totalAmount Decimal  @default(0) @db.Decimal(14, 2)
 
   createdById  String
   approvedById String?
@@ -1501,20 +1546,20 @@ model AppSetting {
 
 /// White-label surface (decision D1). One active row; history kept.
 model BrandingProfile {
-  id           String  @id @default(cuid())
-  companyName  String
-  legalName    String?
-  logoFileId   String?
-  faviconFileId String?
-  primaryColor String  @default("#6B4526")
-  accentColor  String  @default("#B4813F")
-  supportEmail String?
-  supportPhone String?
-  websiteUrl   String?
-  addressBlock String?
+  id                 String  @id @default(cuid())
+  companyName        String
+  legalName          String?
+  logoFileId         String?
+  faviconFileId      String?
+  primaryColor       String  @default("#6B4526")
+  accentColor        String  @default("#B4813F")
+  supportEmail       String?
+  supportPhone       String?
+  websiteUrl         String?
+  addressBlock       String?
   documentHeaderHtml String?
   emailFooterHtml    String?
-  isActive     Boolean @default(true)
+  isActive           Boolean @default(true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1532,22 +1577,24 @@ model IntegrationCredential {
   provider String @unique // "gohighlevel"
 
   /// AES-256-GCM ciphertext, key from env, never logged
-  encryptedToken String
+  encryptedToken  String
   encryptionKeyId String
-  locationId     String?
-  companyId      String?
-  scopes         String[] @default([])
+  locationId      String?
+  companyId       String?
+  scopes          String[] @default([])
 
-  connectedAt      DateTime?
-  connectedById    String?
-  lastVerifiedAt   DateTime?
-  lastVerifyError  String?
-  tokenExpiresAt   DateTime?
+  connectedAt     DateTime?
+  connectedById   String?
+  lastVerifiedAt  DateTime?
+  lastVerifyError String?
+  tokenExpiresAt  DateTime?
 
   /// Which GHL pipeline the CSR intake board reads/writes (Opportunities API).
-  leadPipelineId String?
+  leadPipelineId   String?
   /// Contact tag that marks a GHL contact as a lead the intake board should show.
-  leadTag        String? @default("fb-lead")
+  leadTag          String?   @default("fb-lead")
+  /// Set when the first-run setup (GHL users -> app users) has been completed
+  setupCompletedAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1558,14 +1605,14 @@ model IntegrationCredential {
 /// Maps GHL pipeline stage IDs to our LeadStage enum, so renaming a stage in
 /// GHL does not break sync (FR-ADM-46).
 model GhlPipelineMapping {
-  id            String    @id @default(cuid())
+  id            String        @id @default(cuid())
   ghlPipelineId String
   ghlStageId    String
   ghlStageName  String
   localStage    LeadStage
   /// Which direction this mapping applies to
   direction     SyncDirection @default(BIDIRECTIONAL)
-  isDefault     Boolean   @default(false)
+  isDefault     Boolean       @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1576,14 +1623,14 @@ model GhlPipelineMapping {
 
 /// Maps GHL custom fields to our columns or to a JSON extension bag (FR-ADM-47).
 model GhlFieldMapping {
-  id              String        @id @default(cuid())
-  entity          SyncEntity
-  ghlFieldId      String
-  ghlFieldKey     String
-  localPath       String // "scopeSummary" or "extra.squareFootage"
-  direction       SyncDirection @default(PULL)
-  transform       String? // named transform function, e.g. "phoneE164"
-  active          Boolean       @default(true)
+  id          String        @id @default(cuid())
+  entity      SyncEntity
+  ghlFieldId  String
+  ghlFieldKey String
+  localPath   String // "scopeSummary" or "extra.squareFootage"
+  direction   SyncDirection @default(PULL)
+  transform   String? // named transform function, e.g. "phoneE164"
+  active      Boolean       @default(true)
 
   createdAt DateTime @default(now())
 
@@ -1616,24 +1663,24 @@ model SyncFieldPolicy {
 
 /// Per-record sync bookkeeping. One row per mirrored entity instance.
 model SyncState {
-  id       String     @id @default(cuid())
-  entity   SyncEntity
-  localId  String
-  ghlId    String?
+  id      String     @id @default(cuid())
+  entity  SyncEntity
+  localId String
+  ghlId   String?
 
-  lastPushedAt   DateTime?
-  lastPulledAt   DateTime?
+  lastPushedAt  DateTime?
+  lastPulledAt  DateTime?
   /// Hash of the last payload we pushed, so an unchanged record is not re-sent
-  lastPushHash   String?
+  lastPushHash  String?
   /// Version or updatedAt reported by GHL at last pull, for staleness checks
-  remoteVersion  String?
+  remoteVersion String?
   /// Incremented on every local write, used to detect writes during an in-flight push
-  localVersion   Int        @default(0)
+  localVersion  Int       @default(0)
 
-  inConflict     Boolean    @default(false)
-  conflictNote   String?
-  lastError      String?
-  errorCount     Int        @default(0)
+  inConflict   Boolean @default(false)
+  conflictNote String?
+  lastError    String?
+  errorCount   Int     @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1648,22 +1695,22 @@ model SyncState {
 /// a crash can never lose a push. The worker drains this with exponential
 /// backoff and a dead-letter state.
 model SyncOutbox {
-  id       String     @id @default(cuid())
-  entity   SyncEntity
-  localId  String
+  id        String     @id @default(cuid())
+  entity    SyncEntity
+  localId   String
   operation String // "create", "update", "stage_change", "send_document"
-  payload  Json
+  payload   Json
 
   /// Guarantees GHL never applies the same operation twice
   idempotencyKey String @unique
 
-  status       OutboxStatus @default(PENDING)
-  attempts     Int          @default(0)
-  maxAttempts  Int          @default(8)
-  nextAttemptAt DateTime    @default(now())
-  lastError    String?
+  status        OutboxStatus @default(PENDING)
+  attempts      Int          @default(0)
+  maxAttempts   Int          @default(8)
+  nextAttemptAt DateTime     @default(now())
+  lastError     String?
   lastAttemptAt DateTime?
-  completedAt  DateTime?
+  completedAt   DateTime?
 
   /// Ordering guarantee: operations on the same key process in sequence
   partitionKey String
@@ -1678,14 +1725,14 @@ model SyncOutbox {
 
 /// Inbound webhook log with deduplication. GHL retries; we must be idempotent.
 model WebhookEvent {
-  id         String        @id @default(cuid())
-  provider   String        @default("gohighlevel")
+  id             String  @id @default(cuid())
+  provider       String  @default("gohighlevel")
   /// GHL's event id. Unique index is what makes replay safe.
-  externalId String        @unique
-  eventType  String
-  payload    Json
-  signature  String?
-  signatureValid Boolean   @default(false)
+  externalId     String  @unique
+  eventType      String
+  payload        Json
+  signature      String?
+  signatureValid Boolean @default(false)
 
   status      WebhookStatus @default(RECEIVED)
   attempts    Int           @default(0)
@@ -1703,16 +1750,16 @@ model WebhookEvent {
 /// owned field between syncs. Should be rare by design; a rising count means
 /// the ownership map is wrong somewhere.
 model SyncConflict {
-  id        String     @id @default(cuid())
-  entity    SyncEntity
-  localId   String
-  field     String
-  localValue  Json?
-  remoteValue Json?
-  resolvedAs  SyncOwner
-  resolvedAt  DateTime?
+  id           String     @id @default(cuid())
+  entity       SyncEntity
+  localId      String
+  field        String
+  localValue   Json?
+  remoteValue  Json?
+  resolvedAs   SyncOwner
+  resolvedAt   DateTime?
   resolvedById String?
-  createdAt   DateTime   @default(now())
+  createdAt    DateTime   @default(now())
 
   @@index([entity, localId])
   @@index([resolvedAt])
@@ -1750,18 +1797,18 @@ model FileAsset {
 }
 
 model Notification {
-  id      String  @id @default(cuid())
-  userId  String
-  type    String // "lead.assigned", "estimate.signed", "job.issue.reported"
-  title   String
-  body    String?
+  id       String  @id @default(cuid())
+  userId   String
+  type     String // "lead.assigned", "estimate.signed", "job.issue.reported"
+  title    String
+  body     String?
   /// Deep link into the app
-  linkUrl String?
-  entity  String?
+  linkUrl  String?
+  entity   String?
   entityId String?
 
-  readAt      DateTime?
-  createdAt   DateTime  @default(now())
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -1786,15 +1833,15 @@ model NotificationPreference {
 /// Background job bookkeeping for SLA timers and scheduled work, when
 /// pg-boss is used instead of Redis. Omit this model if BullMQ is chosen.
 model ScheduledTask {
-  id         String    @id @default(cuid())
-  key        String    @unique // "lead:sla:<leadId>"
-  type       String // "lead.sla.expire", "estimate.expire"
-  payload    Json
-  runAt      DateTime
-  executedAt DateTime?
+  id          String    @id @default(cuid())
+  key         String    @unique // "lead:sla:<leadId>"
+  type        String // "lead.sla.expire", "estimate.expire"
+  payload     Json
+  runAt       DateTime
+  executedAt  DateTime?
   cancelledAt DateTime?
-  lastError  String?
-  createdAt  DateTime  @default(now())
+  lastError   String?
+  createdAt   DateTime  @default(now())
 
   @@index([runAt, executedAt])
   @@map("scheduled_tasks")

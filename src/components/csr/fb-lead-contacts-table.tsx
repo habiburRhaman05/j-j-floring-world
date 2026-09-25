@@ -1,58 +1,59 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { Button } from "@/components/ui/button";
 import { Panel, PanelBody, PanelHead } from "@/components/ui/panel";
 import { Pill } from "@/components/ui/pill";
-import { Table, TableWrap, THead, TBody, Tr, Th, Td } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableWrap, THead, TBody, Tr, Th, Td } from "@/components/ui/table";
+import { toApiError } from "@/lib/api/errors";
+import { useFbLeadContacts } from "@/lib/csr/hooks";
 import { relative } from "@/lib/format";
-import { apiGet } from "@/lib/api/client";
-import { endpoints } from "@/lib/api/endpoints";
 
-interface FbLeadContact {
-  id: string;
-  name: string;
-  phone: string;
-  email: string;
-  tags: string[];
-  dateAdded: string | null;
-  inPipeline: boolean;
-}
-
-interface LeadsResponse {
-  contacts: FbLeadContact[];
+interface FbLeadContactsTableProps {
+  /** Name of the pipeline currently on the board, for the stage column header. */
+  pipelineName: string | null;
+  /** contactId -> stage name, for the contacts that have a card on that board. */
+  stageByContactId: ReadonlyMap<string, string>;
 }
 
 /**
- * Every GHL contact carrying the configured lead tag (fb-lead by default),
- * whether or not it has made it into the pipeline yet. This is the raw feed
- * from Facebook Lead Ads - the board above shows only the ones with an open
- * opportunity; this table is the full list underneath it.
+ * Every GHL contact carrying the fb-lead tag, read live from GHL each time the
+ * dashboard loads. GHL's own workflow tags new Facebook leads and moves them
+ * into lead-qualify, so this table is a straight mirror of that tag; the last
+ * column says where each contact sits on the board above.
  */
-export function FbLeadContactsTable() {
-  const { data, isLoading, error } = useQuery({
-    queryKey: ["csr", "fb-lead-contacts"],
-    queryFn: () => apiGet<LeadsResponse>(endpoints.leads.list),
-    staleTime: 15_000,
-  });
+export function FbLeadContactsTable({ pipelineName, stageByContactId }: FbLeadContactsTableProps) {
+  const query = useFbLeadContacts();
+  const contacts = query.data?.contacts ?? [];
 
   return (
     <Panel style={{ marginTop: 16 }}>
       <PanelHead>
         <div>
-          <h3>fb-lead contacts</h3>
-          <div className="t-meta">Every GHL contact tagged fb-lead, board status included.</div>
+          <h3>{query.data?.tag ?? "fb-lead"} contacts</h3>
+          <div className="t-meta">
+            Every contact in GoHighLevel tagged {query.data?.tag ?? "fb-lead"}
+            {query.data ? `, ${contacts.length} in total` : ""}.
+          </div>
         </div>
+        <Button
+          size="sm"
+          variant="ghost"
+          loading={query.isFetching && !query.isPending}
+          onClick={() => void query.refetch()}
+        >
+          Refresh
+        </Button>
       </PanelHead>
       <PanelBody>
-        {isLoading ? (
+        {query.isPending ? (
           <Skeleton style={{ width: "100%", height: 120 }} />
-        ) : error ? (
+        ) : query.error ? (
           <div className="login-alert" role="alert">
-            {error instanceof Error ? error.message : "Couldn't load contacts."}
+            {toApiError(query.error).displayMessage}
           </div>
-        ) : !data || data.contacts.length === 0 ? (
-          <div className="t-meta">No contacts tagged fb-lead yet.</div>
+        ) : contacts.length === 0 ? (
+          <div className="t-meta">No contacts are tagged {query.data?.tag ?? "fb-lead"} yet.</div>
         ) : (
           <TableWrap>
             <Table>
@@ -61,36 +62,41 @@ export function FbLeadContactsTable() {
                   <Th>Name</Th>
                   <Th>Phone</Th>
                   <Th>Email</Th>
+                  <Th>Location</Th>
                   <Th>Tags</Th>
                   <Th>Added</Th>
-                  <Th>Board status</Th>
+                  <Th>{pipelineName ? `${pipelineName} stage` : "Pipeline stage"}</Th>
                 </Tr>
               </THead>
               <TBody>
-                {data.contacts.map((c) => (
-                  <Tr key={c.id}>
-                    <Td>{c.name}</Td>
-                    <Td>{c.phone || "-"}</Td>
-                    <Td>{c.email || "-"}</Td>
-                    <Td>
-                      {c.tags.length
-                        ? c.tags.map((t) => (
-                            <Pill key={t} className="pill-outline" title={t}>
-                              {t}
-                            </Pill>
-                          ))
-                        : "-"}
-                    </Td>
-                    <Td>{c.dateAdded ? relative(c.dateAdded) : "-"}</Td>
-                    <Td>
-                      {c.inPipeline ? (
-                        <Pill className="pill-moss">On board</Pill>
-                      ) : (
-                        <Pill className="pill-outline">Not in pipeline</Pill>
-                      )}
-                    </Td>
-                  </Tr>
-                ))}
+                {contacts.map((c) => {
+                  const stage = stageByContactId.get(c.id);
+                  return (
+                    <Tr key={c.id}>
+                      <Td>{c.name}</Td>
+                      <Td>{c.phone || "-"}</Td>
+                      <Td>{c.email || "-"}</Td>
+                      <Td>{[c.city, c.postalCode].filter(Boolean).join(" ") || "-"}</Td>
+                      <Td>
+                        {c.tags.length
+                          ? c.tags.map((t) => (
+                              <Pill key={t} className="pill-outline" title={t}>
+                                {t}
+                              </Pill>
+                            ))
+                          : "-"}
+                      </Td>
+                      <Td>{c.dateAdded ? relative(c.dateAdded) : "-"}</Td>
+                      <Td>
+                        {stage ? (
+                          <Pill className="pill-moss">{stage}</Pill>
+                        ) : (
+                          <Pill className="pill-outline">Not on this board</Pill>
+                        )}
+                      </Td>
+                    </Tr>
+                  );
+                })}
               </TBody>
             </Table>
           </TableWrap>

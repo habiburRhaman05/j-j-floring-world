@@ -46,6 +46,8 @@ interface TeamUser {
   lastName: string;
   status: string;
   lastLoginAt: string | null;
+  /** "account:admin" / "account:user", or null for a user not imported from GHL. */
+  ghlRole: string | null;
   roles: { id: string; key: string; name: string }[];
 }
 
@@ -158,7 +160,7 @@ export function AdminTeam() {
     },
     {
       id: "roles",
-      header: "Role",
+      header: "App role",
       meta: { className: "col-tight" },
       cell: ({ row }) => (
         <div className="row" style={{ gap: 6 }}>
@@ -169,6 +171,17 @@ export function AdminTeam() {
           ))}
         </div>
       ),
+    },
+    {
+      id: "ghlRole",
+      header: "GHL role",
+      meta: { className: "col-tight muted" },
+      cell: ({ row }) => {
+        const ghl = row.original.ghlRole;
+        if (!ghl) return "Not linked";
+        const role = ghl.split(":")[1] ?? ghl;
+        return role === "admin" ? "Admin" : role === "user" ? "User" : ghl;
+      },
     },
     {
       accessorKey: "status",

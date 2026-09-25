@@ -1,4 +1,4 @@
-import axios, { type AxiosInstance, type AxiosRequestConfig } from "axios";
+import axios, { type AxiosInstance, type AxiosRequestConfig, type InternalAxiosRequestConfig } from "axios";
 import { API_BASE_URL, API_TIMEOUT_MS } from "./config";
 import { ApiError, toApiError } from "./errors";
 
@@ -52,14 +52,55 @@ export function createApiClient(): AxiosInstance {
 
   instance.interceptors.response.use(
     (response) => response,
-    (error: unknown) => {
+    async (error: unknown) => {
       const apiError = toApiError(error);
+      const config = (axios.isAxiosError(error) ? error.config : undefined) as
+        | (InternalAxiosRequestConfig & { _retriedAfterRefresh?: boolean })
+        | undefined;
+
+      // An expired access cookie: trade the refresh cookie for a new pair and
+      // replay the request once. Auth endpoints themselves are never retried.
+      if (
+        apiError.isUnauthorized &&
+        config &&
+        !config._retriedAfterRefresh &&
+        !NO_REFRESH_PATHS.some((path) => config.url?.startsWith(path))
+      ) {
+        config._retriedAfterRefresh = true;
+        if (await refreshSession()) return instance.request(config);
+      }
+
       if (apiError.isUnauthorized) onUnauthorized?.();
       return Promise.reject(apiError);
     },
   );
 
   return instance;
+}
+
+/** Requests whose 401 means "wrong credentials" or "refresh failed", not "access expired". */
+const NO_REFRESH_PATHS = ["/api/auth/login", "/api/auth/refresh", "/api/auth/logout"];
+
+let refreshing: Promise<boolean> | null = null;
+
+/**
+ * One refresh at a time: every request that 401s while a refresh is already in
+ * flight waits on that same call, so parallel requests never present the same
+ * refresh token twice.
+ */
+function refreshSession(): Promise<boolean> {
+  refreshing ??= axios
+    .post("/api/auth/refresh", undefined, {
+      baseURL: API_BASE_URL || undefined,
+      timeout: API_TIMEOUT_MS,
+      withCredentials: true,
+    })
+    .then(() => true)
+    .catch(() => false)
+    .finally(() => {
+      refreshing = null;
+    });
+  return refreshing;
 }
 
 /** The shared instance. Import this rather than calling axios directly. */

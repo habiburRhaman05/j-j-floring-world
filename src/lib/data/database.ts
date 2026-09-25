@@ -10,12 +10,13 @@
    components that call them through `useAppMutation` do not change.
    ========================================================================== */
 
-import { round2, normaliseRate } from "./pricing";
+import { round2, normaliseRate, estimateTierTotals, toInvoiceLines, blankTierMeta } from "./pricing";
 import { buildSeed, uid } from "./seed";
 import { invoiceForJob, jobForEstimate } from "./selectors";
 import type {
   Database,
   Estimate,
+  EstimateTierMeta,
   Invoice,
   Job,
   Lead,
@@ -47,12 +48,16 @@ export interface NewLeadInput {
 export interface ProductInput {
   id?: string | null;
   name: string;
+  sku?: string | null;
+  description?: string | null;
   category: ProductCategory;
   unit: Unit;
   costPerUnit: number | string;
   pricePerUnit: number | string;
   tier?: Tier | null;
   commissionRate?: number | string | null;
+  wasteFactor?: number | string | null;
+  taxable?: boolean;
   active?: boolean;
 }
 
@@ -71,6 +76,10 @@ export interface EstimateInput {
   repId: string;
   depositPercent: number | string;
   tiers: Estimate["tiers"];
+  tierMeta?: Record<Tier, EstimateTierMeta>;
+  customerNotes?: string | null;
+  internalNotes?: string | null;
+  taxRate?: number | string;
 }
 
 class MockDatabase {
@@ -193,23 +202,31 @@ class MockDatabase {
       p = {
         id: uid("prod"),
         name: fields.name,
+        sku: fields.sku ?? null,
+        description: fields.description ?? null,
         category: fields.category,
         unit: fields.unit,
         costPerUnit: 0,
         pricePerUnit: 0,
         tier: fields.tier ?? null,
         commissionRate: null,
+        wasteFactor: null,
+        taxable: true,
         active: true,
       };
       this.db.products.push(p);
     }
     p.name = fields.name;
+    p.sku = fields.sku ?? null;
+    p.description = fields.description ?? null;
     p.category = fields.category;
     p.unit = fields.unit;
     p.costPerUnit = Number(fields.costPerUnit) || 0;
     p.pricePerUnit = Number(fields.pricePerUnit) || 0;
     p.tier = fields.tier ?? null;
     if (fields.commissionRate !== undefined) p.commissionRate = normaliseRate(fields.commissionRate);
+    if (fields.wasteFactor !== undefined) p.wasteFactor = normaliseRate(fields.wasteFactor);
+    if (typeof fields.taxable === "boolean") p.taxable = fields.taxable;
     if (typeof fields.active === "boolean") p.active = fields.active;
     this.record("out", "product.updated", `Product '${p.name}' saved to the product catalog`);
     return p;
@@ -273,6 +290,7 @@ class MockDatabase {
     if (!e) {
       e = {
         id: uid("est"),
+        number: `EST-${new Date().getFullYear()}-${String(this.db.estimates.length + 1).padStart(4, "0")}`,
         leadId: fields.leadId,
         repId: fields.repId,
         createdAt: new Date().toISOString(),
@@ -282,13 +300,23 @@ class MockDatabase {
         depositPercent: 30,
         acceptedTier: null,
         tiers: fields.tiers,
+        tierMeta: fields.tierMeta ?? { Good: blankTierMeta(), Better: blankTierMeta(), Best: blankTierMeta() },
+        customerNotes: fields.customerNotes ?? null,
+        internalNotes: fields.internalNotes ?? null,
+        taxRate: 0,
       };
       this.db.estimates.push(e);
     }
     e.leadId = fields.leadId;
     e.repId = fields.repId;
-    e.depositPercent = Number(fields.depositPercent) || 30;
+    // A zero deposit is a real choice, so only a missing/garbled value falls back.
+    const deposit = Number(fields.depositPercent);
+    e.depositPercent = Number.isFinite(deposit) ? Math.min(Math.max(deposit, 0), 100) : 30;
     e.tiers = fields.tiers;
+    if (fields.tierMeta) e.tierMeta = fields.tierMeta;
+    if (fields.taxRate !== undefined) e.taxRate = Math.max(Number(fields.taxRate) || 0, 0);
+    if (fields.customerNotes !== undefined) e.customerNotes = fields.customerNotes;
+    if (fields.internalNotes !== undefined) e.internalNotes = fields.internalNotes;
     this.commit();
     return e;
   }
@@ -358,7 +386,7 @@ class MockDatabase {
         leadId: e.leadId,
         repId: e.repId,
         tier,
-        lineItems: e.tiers[tier],
+        lineItems: toInvoiceLines(e.tiers[tier]),
         totalPrice: totals.totalPrice,
         totalCost: totals.totalCost,
         totalMargin: totals.totalMargin,
@@ -376,7 +404,7 @@ class MockDatabase {
       invoice.leadId = e.leadId;
       invoice.repId = e.repId;
       invoice.tier = tier;
-      invoice.lineItems = e.tiers[tier];
+      invoice.lineItems = toInvoiceLines(e.tiers[tier]);
       invoice.totalPrice = totals.totalPrice;
       invoice.totalCost = totals.totalCost;
       invoice.totalMargin = totals.totalMargin;
@@ -398,17 +426,7 @@ class MockDatabase {
   }
 
   private totalsForEstimate(estimate: Estimate, tier: Tier) {
-    let price = 0;
-    let cost = 0;
-    for (const line of estimate.tiers[tier]) {
-      const p = this.db.products.find((x) => x.id === line.productId);
-      if (!p) continue;
-      price += p.pricePerUnit * line.qty;
-      cost += p.costPerUnit * line.qty;
-    }
-    price = round2(price);
-    cost = round2(cost);
-    return { totalPrice: price, totalCost: cost, totalMargin: round2(price - cost) };
+    return estimateTierTotals(estimate.tiers[tier], estimate.tierMeta[tier], estimate.taxRate);
   }
 
   /* ------------------------------------------------------- jobs */

@@ -5,6 +5,7 @@ import { requireAdmin, isSoleActiveAdmin } from "@/lib/auth/require-admin";
 import { writeAudit, requestMeta } from "@/lib/auth/audit";
 import { errorResponse, zodErrorResponse } from "@/lib/api/server-response";
 import { apiRoute } from "@/lib/api/api-route";
+import { appRoleForKey } from "@/lib/auth/app-role";
 
 const UpdateUserSchema = z
   .object({
@@ -69,6 +70,7 @@ export const PATCH = apiRoute(
       if (role) {
         await tx.userRole.deleteMany({ where: { userId: id } });
         await tx.userRole.create({ data: { userId: id, roleId: role.id } });
+        await tx.user.update({ where: { id }, data: { role: appRoleForKey(role.key) } });
       }
       return user;
     });
@@ -114,6 +116,7 @@ export const DELETE = apiRoute(
     await prisma.$transaction([
       prisma.user.update({ where: { id }, data: { deletedAt: new Date(), status: "DISABLED" } }),
       prisma.session.deleteMany({ where: { userId: id } }),
+      prisma.refreshToken.updateMany({ where: { userId: id, revokedAt: null }, data: { revokedAt: new Date() } }),
     ]);
 
     const { ipAddress, userAgent } = requestMeta(request);

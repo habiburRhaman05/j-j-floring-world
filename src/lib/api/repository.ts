@@ -24,6 +24,7 @@ import type {
 } from "../types";
 import { USE_MOCK_API } from "./config";
 import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from "./client";
+import { ApiError } from "./errors";
 import { endpoints } from "./endpoints";
 import { db as mockDb, type EstimateInput, type NewLeadInput, type ProductInput, type UserInput } from "../data/database";
 
@@ -134,6 +135,16 @@ export function createMockRepository(): WorkspaceRepository {
 
 /* ------------------------------------------------------ HTTP implementation */
 
+/** `subject` reads as the start of a sentence, e.g. "Estimates are". */
+function notConnected(subject: string): Promise<never> {
+  return Promise.reject(
+    new ApiError(`${subject} not connected to the database yet.`, {
+      status: 501,
+      code: "not_implemented",
+    }),
+  );
+}
+
 export function createHttpRepository(): WorkspaceRepository {
   return {
     getSnapshot: () => apiGet<Database>(endpoints.workspace),
@@ -151,8 +162,7 @@ export function createHttpRepository(): WorkspaceRepository {
       fields.id
         ? apiPut<Product>(endpoints.products.detail(fields.id), fields)
         : apiPost<Product>(endpoints.products.create, fields),
-    setProductCommission: (productId, rate) =>
-      apiPatch<Product | null>(endpoints.products.commission(productId), { commissionRate: rate }),
+    setProductCommission: () => notConnected("Per-product commission is"),
     toggleProduct: (productId) => apiPatch<Product | null>(endpoints.products.toggle(productId)),
 
     saveUser: (fields) =>
@@ -161,34 +171,26 @@ export function createHttpRepository(): WorkspaceRepository {
         : apiPost<User>(endpoints.users.create, fields),
     removeUser: (userId) => apiDelete<boolean>(endpoints.users.detail(userId)),
 
-    saveEstimate: (fields) =>
-      fields.id
-        ? apiPut<Estimate>(endpoints.estimates.detail(fields.id), fields)
-        : apiPost<Estimate>(endpoints.estimates.create, fields),
-    sendEstimate: (estimateId) => apiPost<Estimate | null>(endpoints.estimates.send(estimateId)),
-    markEstimateViewed: (estimateId) =>
-      apiPost<Estimate | null>(endpoints.estimates.viewed(estimateId)),
-    signEstimate: (estimateId, typedName, tier) =>
-      apiPost<{ estimate: Estimate; job: Job; invoice: Invoice } | null>(
-        endpoints.estimates.sign(estimateId),
-        { signedByName: typedName, tier },
-      ),
+    // Estimates, jobs, invoices and the sync/demo controls have no Route
+    // Handlers yet (only the mock store implements them). Failing here with a
+    // plain explanation beats a request that 404s into "That record no longer
+    // exists". Replace each with its apiX call as the route lands.
+    saveEstimate: () => notConnected("Estimates are"),
+    sendEstimate: () => notConnected("Estimates are"),
+    markEstimateViewed: () => notConnected("Estimates are"),
+    signEstimate: () => notConnected("Estimates are"),
 
-    setJobStage: (jobId, stage) => apiPatch<Job | null>(endpoints.jobs.stage(jobId), { stage }),
-    assignInstaller: (jobId, installerId, isoDate) =>
-      apiPatch<Job | null>(endpoints.jobs.assignment(jobId), { installerId, scheduledDate: isoDate }),
-    setMaterialsReceived: (jobId, value) =>
-      apiPatch<Job | null>(endpoints.jobs.materials(jobId), { materialsReceived: value }),
-    addJobPhoto: (jobId, label, name) =>
-      apiPost<Job | null>(endpoints.jobs.photos(jobId), { label, name }),
-    confirmJob: (jobId) => apiPost<Job | null>(endpoints.jobs.confirm(jobId)),
+    setJobStage: () => notConnected("Jobs are"),
+    assignInstaller: () => notConnected("Jobs are"),
+    setMaterialsReceived: () => notConnected("Jobs are"),
+    addJobPhoto: () => notConnected("Jobs are"),
+    confirmJob: () => notConnected("Jobs are"),
 
-    setPaymentStatus: (invoiceId, status) =>
-      apiPatch<Invoice | null>(endpoints.invoices.payment(invoiceId), { paymentStatus: status }),
+    setPaymentStatus: () => notConnected("Invoices are"),
 
-    resetDemoData: () => apiPost<void>(endpoints.demo.reset),
-    clearSyncLog: () => apiDelete<void>(endpoints.sync.log),
-    simulateInboundEvent: () => apiPost<SyncEntry | void>(endpoints.sync.simulateInbound),
+    resetDemoData: () => notConnected("Demo reset is"),
+    clearSyncLog: () => notConnected("The sync log is"),
+    simulateInboundEvent: () => notConnected("Sync simulation is"),
   };
 }
 

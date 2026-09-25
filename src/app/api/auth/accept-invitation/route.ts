@@ -6,6 +6,7 @@ import { hashPassword, MIN_PASSWORD_LENGTH } from "@/lib/auth/password";
 import { writeAudit, requestMeta } from "@/lib/auth/audit";
 import { errorResponse, zodErrorResponse } from "@/lib/api/server-response";
 import { apiRoute } from "@/lib/api/api-route";
+import { appRoleForKey } from "@/lib/auth/app-role";
 
 async function loadValidInvitation(rawToken: string) {
   const invitation = await prisma.userInvitation.findUnique({
@@ -76,6 +77,7 @@ export const POST = apiRoute(async (request: NextRequest) => {
         passwordHash,
         status: "ACTIVE",
         mustChangePassword: false,
+        role: appRoleForKey(invitation.role.key),
       },
     });
     await tx.userRole.create({ data: { userId: created.id, roleId: invitation.roleId } });

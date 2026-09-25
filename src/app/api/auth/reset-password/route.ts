@@ -42,6 +42,10 @@ export const POST = apiRoute(async (request: NextRequest) => {
       data: { usedAt: new Date() },
     }),
     prisma.session.deleteMany({ where: { userId: record.userId } }),
+    prisma.refreshToken.updateMany({
+      where: { userId: record.userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    }),
   ]);
 
   await writeAudit({

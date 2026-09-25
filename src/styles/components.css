@@ -25,6 +25,16 @@
 .btn[disabled], .btn[aria-disabled="true"] {
   opacity: .45; cursor: not-allowed; pointer-events: none; box-shadow: none;
 }
+/* A button waiting on a request stays fully visible (only disabled ones fade)
+   and shows a spinner, so it reads as "working", not "broken". */
+.btn.is-loading { opacity: 1; cursor: progress; }
+.btn-spinner {
+  width: 13px; height: 13px; flex: none; border-radius: 50%;
+  border: 2px solid currentColor; border-right-color: transparent;
+  animation: btn-spin .7s linear infinite;
+}
+@keyframes btn-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .btn-spinner { animation-duration: 2s; } }
 .btn svg { width: 16px; height: 16px; flex: none; }
 
 .btn-primary {
@@ -184,7 +194,10 @@
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
 }
-table.grid { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+/* `display: table` is explicit because Tailwind v4 also emits a `.grid`
+   utility (display: grid) for this class name; without it each row lays out
+   its cells independently and the header stops lining up with the body. */
+table.grid { display: table; width: 100%; border-collapse: collapse; font-size: 13.5px; }
 table.grid th {
   text-align: left; font-size: 11px; font-weight: 800; color: var(--ink-3);
   letter-spacing: .06em; text-transform: uppercase;
@@ -241,6 +254,12 @@ table.grid th .th-sort .th-caret { font-size: 9px; line-height: 1; opacity: .9; 
   background: var(--panel); border: 1px solid var(--rule); border-radius: var(--r-pill); padding: 1px 8px;
 }
 .col-body { display: flex; flex-direction: column; gap: 9px; min-height: 44px; }
+/* Column header with a count/total line under the stage name, like GHL's board. */
+.col-head-stack { flex-direction: column; align-items: stretch; gap: 3px; }
+.col-sub { display: flex; align-items: baseline; gap: 8px; font-size: 11.5px; color: var(--ink-3); }
+.col-sub .col-total { font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+.tile-saving { opacity: .6; cursor: progress; }
+.tile-saving-label { display: block; margin-top: 6px; font-size: 11px; color: var(--blue); }
 .col.won   .col-head { border-bottom-color: var(--moss); }
 .col.lost  .col-head { border-bottom-color: var(--clay); }
 

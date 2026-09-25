@@ -94,9 +94,9 @@ function useRepositoryMutation<TArgs extends unknown[], TResult>(
 
   return useMutation<TResult, Error, TArgs>({
     mutationFn: (variables: TArgs) => run(getRepository(), ...variables),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: appDbKey });
-    },
+    // Returned, not voided: the mutation stays pending (button spinner on)
+    // until the refreshed snapshot is on screen, so nothing looks stale.
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: appDbKey }),
     onError: (error) => {
       toast(toApiError(error).displayMessage, "warn", 4600);
     },
@@ -112,9 +112,9 @@ function useRepositoryAction<TResult>(
 
   return useMutation<TResult, Error, void>({
     mutationFn: () => run(getRepository()),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: appDbKey });
-    },
+    // Returned, not voided: the mutation stays pending (button spinner on)
+    // until the refreshed snapshot is on screen, so nothing looks stale.
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: appDbKey }),
     onError: (error) => {
       toast(toApiError(error).displayMessage, "warn", 4600);
     },

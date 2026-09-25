@@ -9,7 +9,7 @@ import { StagePill } from "@/components/ui/pill";
 import { StageSelect } from "@/components/pipeline/stage-select";
 import { useAddLeadNote, useSetLeadStage } from "@/lib/data/hooks";
 import { estimatesForLead } from "@/lib/data/selectors";
-import { totalsFor } from "@/lib/data/pricing";
+import { estimateTierTotals } from "@/lib/data/pricing";
 import { SALES_STAGES } from "@/lib/constants";
 import { dt, money2 } from "@/lib/format";
 import type { Database, Lead, LeadStage } from "@/lib/types";
@@ -96,9 +96,11 @@ export function RepLeadDialog({
         </div>
       ) : null}
       {estimates.map((estimate) => {
-        const totals = totalsFor(
-          db.products,
-          estimate.tiers[estimate.acceptedTier ?? "Better"] ?? [],
+        const acceptedTier = estimate.acceptedTier ?? "Better";
+        const totals = estimateTierTotals(
+          estimate.tiers[acceptedTier] ?? [],
+          estimate.tierMeta[acceptedTier],
+          estimate.taxRate,
         );
         return (
           <div key={estimate.id} className="spread dotted-row">
@@ -128,15 +130,19 @@ export function RepLeadDialog({
       <Button
         size="sm"
         style={{ marginTop: 8 }}
+        loading={addLeadNote.isPending}
         onClick={() => {
           const text = note.trim();
           if (!text) {
             toast("Write something first.", "warn");
             return;
           }
-          addLeadNote.mutate([lead.id, text, meId]);
-          setNote("");
-          toast("Note saved.", "ok");
+          addLeadNote.mutate([lead.id, text, meId], {
+            onSuccess: () => {
+              setNote("");
+              toast("Note saved.", "ok");
+            },
+          });
         }}
       >
         Save note

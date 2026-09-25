@@ -17,7 +17,7 @@ import type {
   JobFinancials,
   RepStats,
 } from "../types";
-import { byId, totalsFor } from "./pricing";
+import { byId, estimateTierTotals } from "./pricing";
 
 export function invoiceForJob(db: Database, jobId: string): Invoice | null {
   return db.invoices.find((i) => i.jobId === jobId) ?? null;
@@ -127,5 +127,5 @@ export function amountOwed(inv: Invoice): number {
 /** The customer-facing total for whichever tier was accepted. */
 export function acceptedTotal(db: Database, est: Estimate): number {
   const tier = est.acceptedTier ?? "Better";
-  return totalsFor(db.products, est.tiers[tier]).totalPrice;
+  return estimateTierTotals(est.tiers[tier], est.tierMeta[tier]).totalPrice;
 }

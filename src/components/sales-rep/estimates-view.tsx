@@ -10,7 +10,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Panel } from "@/components/ui/panel";
 import { StagePill } from "@/components/ui/pill";
 import { useSendEstimate } from "@/lib/data/hooks";
-import { totalsFor } from "@/lib/data/pricing";
+import { estimateTierTotals } from "@/lib/data/pricing";
 import { dt, money2 } from "@/lib/format";
 import type { Database, Estimate } from "@/lib/types";
 
@@ -59,7 +59,7 @@ export function RepEstimates({ db, meId }: { db: Database; meId: string }) {
       meta: { numeric: true },
       cell: ({ row }) => {
         const tier = row.original.acceptedTier ?? "Better";
-        return money2(totalsFor(db.products, row.original.tiers[tier]).totalPrice);
+        return money2(estimateTierTotals(row.original.tiers[tier], row.original.tierMeta[tier], row.original.taxRate).totalPrice);
       },
     },
     {
@@ -80,9 +80,11 @@ export function RepEstimates({ db, meId }: { db: Database; meId: string }) {
                 <Button
                   size="sm"
                   variant="primary"
+                  loading={sendEstimate.isPending && sendEstimate.variables?.[0] === estimate.id}
                   onClick={() => {
-                    sendEstimate.mutate([estimate.id]);
-                    toast("Estimate sent.", "ok");
+                    sendEstimate.mutate([estimate.id], {
+                      onSuccess: () => toast("Estimate sent.", "ok"),
+                    });
                   }}
                 >
                   Send

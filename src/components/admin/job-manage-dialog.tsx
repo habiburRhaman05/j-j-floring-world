@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { CheckField } from "@/components/ui/checkbox";
 import { Input, Select } from "@/components/ui/input";
 import { Field } from "@/components/ui/label";
-import { Modal } from "@/components/ui/modal";
+import { Modal, type ModalAction } from "@/components/ui/modal";
 import { JobRail } from "@/components/pipeline/job-rail";
 import { StageSelect } from "@/components/pipeline/stage-select";
 import {
@@ -46,18 +46,18 @@ export function JobManageDialog({ job, db, onClose }: JobManageDialogProps) {
   const invoice = invoiceForJob(db, job.id);
   const installers = db.users.filter((u) => u.role === "Installer");
 
-  const actions: {
-    label: string;
-    variant?: "go" | "ghost";
-    onClick?: () => void;
-  }[] = [{ label: "Close", variant: "ghost" }];
+  const actions: ModalAction[] = [{ label: "Close", variant: "ghost" }];
 
   if (job.stage === "Completed" && !job.adminConfirmedAt) {
     actions.push({
       label: "Confirm completion",
       variant: "go",
-      onClick: () => {
-        confirmJob.mutate([job.id]);
+      onClick: async () => {
+        try {
+          await confirmJob.mutateAsync([job.id]);
+        } catch {
+          return false;
+        }
         toast("Completion confirmed.", "ok");
       },
     });

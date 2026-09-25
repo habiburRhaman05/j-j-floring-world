@@ -45,22 +45,36 @@ export function AdminProducts({ db }: { db: Database }) {
     {
       accessorKey: "name",
       header: "Product",
-      cell: ({ row }) => (
-        <>
-          <div style={{ fontWeight: 500 }}>{row.original.name}</div>
-          <div className="t-meta">{row.original.tier ? `${row.original.tier} tier` : ""}</div>
-        </>
-      ),
+      cell: ({ row }) => {
+        const p = row.original;
+        const meta = [p.sku, p.tier ? `${p.tier} package` : null, p.active ? null : "Inactive"]
+          .filter(Boolean)
+          .join(" · ");
+        return (
+          <>
+            <div style={{ fontWeight: 500 }}>{p.name}</div>
+            {meta ? <div className="t-meta">{meta}</div> : null}
+          </>
+        );
+      },
     },
     {
       accessorKey: "category",
       header: "Category",
+      meta: { className: "col-tight" },
       cell: ({ row }) => <Pill className="pill-outline">{row.original.category}</Pill>,
     },
     {
       accessorKey: "unit",
       header: "Unit",
-      meta: { className: "muted" },
+      meta: { className: "muted col-tight" },
+    },
+    {
+      id: "tax",
+      header: "Tax",
+      meta: { className: "muted col-tight" },
+      accessorFn: (p) => (p.taxable ? 1 : 0),
+      cell: ({ row }) => (row.original.taxable ? "Taxable" : "Exempt"),
     },
     {
       accessorKey: "costPerUnit",
@@ -97,8 +111,9 @@ export function AdminProducts({ db }: { db: Database }) {
       id: "actions",
       header: "",
       enableSorting: false,
+      meta: { className: "col-tight" },
       cell: ({ row }) => (
-        <div className="row">
+        <div className="row" style={{ justifyContent: "flex-end" }}>
           <Button
             size="sm"
             onClick={() => setForm({ open: true, productId: row.original.id })}
@@ -108,9 +123,12 @@ export function AdminProducts({ db }: { db: Database }) {
           <Button
             size="sm"
             variant="ghost"
+            loading={toggleProduct.isPending && toggleProduct.variables?.[0] === row.original.id}
             onClick={() => {
-              toggleProduct.mutate([row.original.id]);
-              toast(`Product ${row.original.active ? "deactivated" : "activated"}.`);
+              const wasActive = row.original.active;
+              toggleProduct.mutate([row.original.id], {
+                onSuccess: () => toast(`Product ${wasActive ? "deactivated" : "activated"}.`, "ok"),
+              });
             }}
           >
             {row.original.active ? "Deactivate" : "Activate"}

@@ -35,7 +35,8 @@ export const POST = apiRoute(async (request: NextRequest) => {
   const parsed = ProductInputSchema.safeParse(json);
   if (!parsed.success) return zodErrorResponse(parsed.error);
 
-  const { name, category, unit, costPerUnit, pricePerUnit, tier } = parsed.data;
+  const { name, sku, description, category, unit, costPerUnit, pricePerUnit, tier, wasteFactor, taxable } =
+    parsed.data;
   const key = categoryKey(category);
 
   const row = await prisma.$transaction(async (tx) => {
@@ -48,11 +49,15 @@ export const POST = apiRoute(async (request: NextRequest) => {
     return tx.product.create({
       data: {
         name,
+        sku: sku || null,
+        description: description || null,
         categoryId: categoryRow.id,
         unit: unitToDb(unit),
         costPerUnit,
         pricePerUnit,
         tierAffinity: tierToDb(tier),
+        wasteFactor: wasteFactor ?? null,
+        ...(typeof taxable === "boolean" ? { taxable } : {}),
       },
       include: { category: true },
     });

@@ -23,19 +23,15 @@ import type { Product, ProductCategory, Tier, Unit } from "@/lib/types";
 /** A product row with its category joined, as every reader selects it. */
 export type ProductWithCategory = ProductRow & { category: ProductCategoryRow };
 
-/**
- * The UI offers four units; the enum carries three more that nothing in the UI
- * can author yet. Those read as "EA" rather than disappearing, so a row created
- * elsewhere is still visible in the catalog instead of breaking the table.
- */
+/** Every enum unit has a UI spelling; only square yard is spelled differently. */
 const UNIT_FROM_DB: Record<UnitOfMeasure, Unit> = {
   SF: "SF",
   SY: "YD",
   LF: "LF",
   EA: "EA",
-  HR: "EA",
-  GAL: "EA",
-  BOX: "EA",
+  HR: "HR",
+  GAL: "GAL",
+  BOX: "BOX",
 };
 
 const UNIT_TO_DB: Record<Unit, UnitOfMeasure> = {
@@ -43,6 +39,9 @@ const UNIT_TO_DB: Record<Unit, UnitOfMeasure> = {
   YD: "SY",
   LF: "LF",
   EA: "EA",
+  HR: "HR",
+  GAL: "GAL",
+  BOX: "BOX",
 };
 
 const TIER_FROM_DB: Record<TierLevel, Tier> = {
@@ -82,12 +81,16 @@ export function toProduct(row: ProductWithCategory): Product {
   return {
     id: row.id,
     name: row.name,
+    sku: row.sku ?? null,
+    description: row.description ?? null,
     category: row.category.name as ProductCategory,
     unit: UNIT_FROM_DB[row.unit],
     costPerUnit: Number(row.costPerUnit),
     pricePerUnit: Number(row.pricePerUnit),
     tier: row.tierAffinity ? TIER_FROM_DB[row.tierAffinity] : null,
     commissionRate: null,
+    wasteFactor: row.wasteFactor === null || row.wasteFactor === undefined ? null : Number(row.wasteFactor),
+    taxable: row.taxable,
     active: row.active,
   };
 }

@@ -61,7 +61,7 @@ export async function fetchCurrentSession(): Promise<SessionUser | null> {
 }
 
 export async function signIn(email: string, password: string): Promise<SessionUser> {
-  const { user } = await apiPost<{ user: ServerSessionUser; expiresAt: string | null }>(
+  const { user } = await apiPost<{ user: ServerSessionUser }>(
     endpoints.auth.login,
     { email, password },
   );

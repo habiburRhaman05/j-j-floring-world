@@ -1,7 +1,7 @@
 "use client";
 
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useToast } from "@/components/providers/toast-provider";
 import { toApiError } from "@/lib/api/errors";
 import { cn } from "@/lib/utils";
@@ -51,25 +51,40 @@ export function Modal({
   className,
   children,
 }: ModalProps) {
-  const close = () => onOpenChange(false);
   const { toast } = useToast();
+  /** Label of the action whose handler is still running, if any. */
+  const [busy, setBusy] = useState<string | null>(null);
+  const close = () => onOpenChange(false);
 
   /**
    * Runs an action and closes unless it asked to stay open. A handler that
-   * writes through the API is awaited; a failure is reported here, once, and
-   * leaves the dialog open so the work is not lost.
+   * writes through the API is awaited while its button shows a spinner and
+   * every other foot button is disabled, so a slow save cannot be clicked
+   * twice or abandoned half-way. A failure is reported here, once, and leaves
+   * the dialog open so the work is not lost.
    */
   async function runAction(action: ModalAction) {
+    if (busy) return;
+    setBusy(action.label);
     try {
       const result = await action.onClick?.(close);
       if (!action.keep && result !== false) close();
     } catch (error) {
       toast(toApiError(error).displayMessage, "warn", 4600);
+    } finally {
+      setBusy(null);
     }
   }
 
   return (
-    <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
+    <DialogPrimitive.Root
+      open={open}
+      onOpenChange={(next) => {
+        // Escape / the close button wait for an in-flight save.
+        if (!next && busy) return;
+        onOpenChange(next);
+      }}
+    >
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="scrim">
           <DialogPrimitive.Content
@@ -106,6 +121,8 @@ export function Modal({
                   <Button
                     key={action.label}
                     variant={action.variant}
+                    loading={busy === action.label}
+                    disabled={busy !== null && busy !== action.label}
                     onClick={() => void runAction(action)}
                   >
                     {action.label}

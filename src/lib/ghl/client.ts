@@ -166,7 +166,7 @@ export interface GhlPipeline {
   stages: GhlPipelineStage[];
 }
 
-async function ghlFetch<T>(connection: GhlConnection, path: string, init?: RequestInit): Promise<T> {
+export async function ghlFetch<T>(connection: GhlConnection, path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${GHL_API_BASE}${path}`, {
     ...init,
     headers: {
@@ -203,19 +203,47 @@ export interface GhlOpportunity {
   monetaryValue?: number;
   contactId: string;
   createdAt?: string;
-  contact?: { name?: string; email?: string; phone?: string; tags?: string[] };
+  updatedAt?: string;
+  contact?: { id?: string; name?: string; email?: string; phone?: string; tags?: string[] };
 }
 
-/** GET /opportunities/search - every opportunity currently sitting in one pipeline. */
+/**
+ * GET /opportunities/search - every opportunity in one pipeline.
+ *
+ * GHL caps a page at 100, so this walks pages until one comes back short (or
+ * the reported total is reached) instead of silently dropping the rest.
+ * `status` defaults to "open", which is what GHL's own board shows under
+ * "Open opportunities".
+ */
 export async function searchOpportunitiesByPipeline(
   connection: GhlConnection,
   pipelineId: string,
+  options: { status?: "open" | "won" | "lost" | "abandoned" | "all" } = {},
 ): Promise<GhlOpportunity[]> {
-  const data = await ghlFetch<{ opportunities: GhlOpportunity[] }>(
-    connection,
-    `/opportunities/search?location_id=${encodeURIComponent(connection.locationId)}&pipeline_id=${encodeURIComponent(pipelineId)}&limit=100`,
-  );
-  return data.opportunities ?? [];
+  const LIMIT = 100;
+  const MAX_PAGES = 30; // 3,000 opportunities in one pipeline
+  const all: GhlOpportunity[] = [];
+
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const params = new URLSearchParams({
+      location_id: connection.locationId,
+      pipeline_id: pipelineId,
+      status: options.status ?? "open",
+      limit: String(LIMIT),
+      page: String(page),
+    });
+    const data = await ghlFetch<{ opportunities: GhlOpportunity[]; meta?: { total?: number } }>(
+      connection,
+      `/opportunities/search?${params.toString()}`,
+    );
+    const batch = data.opportunities ?? [];
+    all.push(...batch);
+    if (batch.length < LIMIT) break;
+    if (data.meta?.total !== undefined && all.length >= data.meta.total) break;
+  }
+
+  // A page boundary can repeat a row when something moves mid-walk.
+  return [...new Map(all.map((o) => [o.id, o] as const)).values()];
 }
 
 export interface GhlContact {
@@ -229,6 +257,7 @@ export interface GhlContact {
   postalCode?: string;
   tags?: string[];
   dateAdded?: string;
+  source?: string;
 }
 
 /**
@@ -282,10 +311,11 @@ export async function updateOpportunityStage(
   connection: GhlConnection,
   opportunityId: string,
   pipelineStageId: string,
+  pipelineId?: string,
 ): Promise<void> {
   await ghlFetch(connection, `/opportunities/${opportunityId}`, {
     method: "PUT",
-    body: JSON.stringify({ pipelineStageId }),
+    body: JSON.stringify({ pipelineStageId, ...(pipelineId ? { pipelineId } : {}) }),
   });
 }
 
@@ -337,4 +367,105 @@ export async function addContactNote(connection: GhlConnection, contactId: strin
     method: "POST",
     body: JSON.stringify({ body }),
   });
+}
+
+/* ==========================================================================
+   Users - first-run setup imports the sub-account's users, and GHL
+   auto-login re-checks one user on every sign-in.
+   ========================================================================== */
+
+export interface GhlUser {
+  id: string;
+  name?: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  deleted?: boolean;
+  /** e.g. { type: "account", role: "admin", locationIds: [...] }. "agency" users belong to the agency, not the sub-account. */
+  roles?: { type?: string; role?: string; locationIds?: string[] };
+}
+
+export interface GhlLocation {
+  id: string;
+  name: string;
+  companyId: string | null;
+  /** The business email on the sub-account, used as an agency-owner hint. */
+  email: string | null;
+}
+
+/** A connection built from credentials typed into the setup page, before anything is saved. */
+export function connectionFromCredentials(token: string, locationId: string): GhlConnection {
+  return { token, locationId, leadPipelineId: null, leadTag: "fb-lead" };
+}
+
+/** GET /locations/:id - proves the token can read this sub-account. */
+export async function getLocation(connection: GhlConnection): Promise<GhlLocation> {
+  const data = await ghlFetch<{
+    location?: { id: string; name?: string; companyId?: string; email?: string };
+  }>(connection, `/locations/${encodeURIComponent(connection.locationId)}`);
+  if (!data.location?.id) throw new Error("GoHighLevel did not return that location.");
+  return {
+    id: data.location.id,
+    name: data.location.name ?? data.location.id,
+    companyId: data.location.companyId ?? null,
+    email: data.location.email?.trim().toLowerCase() || null,
+  };
+}
+
+/**
+ * GET /companies/:id - the agency's own email, the strongest owner signal.
+ * A sub-account PIT often lacks the companies scope; that is not an error
+ * here, it just means the next signal is used.
+ */
+export async function getCompanyEmail(connection: GhlConnection, companyId: string): Promise<string | null> {
+  try {
+    const data = await ghlFetch<{ company?: { email?: string } }>(
+      connection,
+      `/companies/${encodeURIComponent(companyId)}`,
+    );
+    return data.company?.email?.trim().toLowerCase() || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A user who can work in this sub-account: not deleted, and either an agency
+ * user or a sub-account user, whose location list (when GHL sends one)
+ * includes this location.
+ */
+export function isLocationUser(user: GhlUser, locationId: string): boolean {
+  if (user.deleted) return false;
+  const type = user.roles?.type;
+  if (type !== "account" && type !== "agency") return false;
+  const locations = user.roles?.locationIds ?? [];
+  return locations.length === 0 || locations.includes(locationId);
+}
+
+/** GET /users/?locationId= - every user GHL lists for the location. */
+export async function listLocationUsers(connection: GhlConnection): Promise<GhlUser[]> {
+  const data = await ghlFetch<{ users?: GhlUser[] }>(
+    connection,
+    `/users/?locationId=${encodeURIComponent(connection.locationId)}`,
+  );
+  return data.users ?? [];
+}
+
+/** GET /users/:id - one user, or null when GHL does not know the id. */
+export async function getGhlUser(connection: GhlConnection, userId: string): Promise<GhlUser | null> {
+  try {
+    const data = await ghlFetch<GhlUser & { user?: GhlUser }>(
+      connection,
+      `/users/${encodeURIComponent(userId)}`,
+    );
+    return data.user ?? (data.id ? data : null);
+  } catch (error) {
+    if (error instanceof Error && /GHL (400|404|422) /.test(error.message)) return null;
+    throw error;
+  }
+}
+
+/** "account:admin", "account:user" - what the user is in GHL, stored next to their app role. */
+export function ghlRoleOf(user: GhlUser): string {
+  return `${user.roles?.type ?? "unknown"}:${user.roles?.role ?? "unknown"}`;
 }

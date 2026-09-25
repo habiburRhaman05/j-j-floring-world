@@ -6,7 +6,7 @@ import { Modal } from "@/components/ui/modal";
 import { Panel, PanelBody, PanelHead } from "@/components/ui/panel";
 import { StagePill } from "@/components/ui/pill";
 import { useAppStore, useMarkEstimateViewed } from "@/lib/data/hooks";
-import { round2, totalsFor } from "@/lib/data/pricing";
+import { round2, estimateTierTotals } from "@/lib/data/pricing";
 import { dt, money2, qty } from "@/lib/format";
 import { TIERS } from "@/lib/constants";
 import type { Database, Tier } from "@/lib/types";
@@ -72,13 +72,9 @@ export function SignSheet({ open, onOpenChange, db, estimateId }: SignSheetProps
                     toast("Type the full name to sign.", "warn");
                     return false;
                   }
-                  const result = await store.signEstimate(estimate.id, typed, chosen);
+                  await store.signEstimate(estimate.id, typed, chosen);
                   invalidate();
-                  toast(
-                    `Signed. Job ${result?.job.id} created and deposit recorded.`,
-                    "ok",
-                    4200,
-                  );
+                  toast("Signed. Deal marked Won - installer scheduling is next.", "ok", 4200);
                   close();
                 },
               },
@@ -95,13 +91,20 @@ export function SignSheet({ open, onOpenChange, db, estimateId }: SignSheetProps
         </div>
       </div>
 
+      {estimate.customerNotes ? (
+        <p className="t-meta" style={{ margin: "14px 0 0", whiteSpace: "pre-line" }}>
+          {estimate.customerNotes}
+        </p>
+      ) : null}
+
       <div style={{ marginTop: 16 }}>
         {TIERS.map((tier) => {
           const lines = estimate.tiers[tier] ?? [];
           if (!lines.length) return null;
-          const totals = totalsFor(db.products, lines);
+          const totals = estimateTierTotals(lines, estimate.tierMeta[tier], estimate.taxRate);
           const deposit = round2(totals.totalPrice * (estimate.depositPercent / 100));
           const selected = chosen === tier;
+          const tierLabel = estimate.tierMeta[tier]?.label || tier;
 
           return (
             <Panel
@@ -123,7 +126,7 @@ export function SignSheet({ open, onOpenChange, db, estimateId }: SignSheetProps
                     readOnly
                     style={{ accentColor: "var(--blue)" }}
                   />
-                  <h3>{tier}</h3>
+                  <h3>{tierLabel}</h3>
                 </div>
                 <div style={{ textAlign: "right" }}>
                   <div className="money-big">{money2(totals.totalPrice)}</div>
@@ -133,16 +136,48 @@ export function SignSheet({ open, onOpenChange, db, estimateId }: SignSheetProps
                 </div>
               </PanelHead>
               <PanelBody tight>
+                {estimate.tierMeta[tier]?.summary ? (
+                  <p className="t-meta" style={{ margin: "0 0 10px" }}>
+                    {estimate.tierMeta[tier]?.summary}
+                  </p>
+                ) : null}
                 <ul className="scope-list">
                   {totals.rows.map((row) => (
-                    <li key={row.productId}>
-                      <span>{row.name}</span>
+                    <li key={row.id}>
+                      <span>
+                        {row.name}
+                        {row.description ? (
+                          <span className="t-meta" style={{ display: "block" }}>
+                            {row.description}
+                          </span>
+                        ) : null}
+                      </span>
                       <span className="q">
                         {qty(row.qty)} {row.unit}, {money2(row.linePrice)}
                       </span>
                     </li>
                   ))}
                 </ul>
+                {totals.discountAmount > 0 || totals.taxAmount > 0 ? (
+                  <div className="pkg-sum">
+                    <div>
+                      <span>Subtotal</span>
+                      <span>{money2(totals.subtotalPrice)}</span>
+                    </div>
+                    {totals.discountAmount > 0 ? (
+                      <div className="save">
+                        <span>Discount</span>
+                        <span>-{money2(totals.discountAmount)}</span>
+                      </div>
+                    ) : null}
+                    {totals.taxAmount > 0 ? (
+                      <div>
+                        <span>Sales tax ({estimate.taxRate}%)</span>
+                        <span>{money2(totals.taxAmount)}</span>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
               </PanelBody>
             </Panel>
           );

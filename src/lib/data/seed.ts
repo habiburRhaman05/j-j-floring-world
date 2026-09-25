@@ -9,6 +9,8 @@ import { DEFAULT_COMMISSION_RATE } from "../constants";
 import type {
   Database,
   Estimate,
+  EstimateLine,
+  EstimateTierMeta,
   Invoice,
   Job,
   JobStage,
@@ -23,7 +25,7 @@ import type {
   Unit,
   User,
 } from "../types";
-import { byId, totalsFor } from "./pricing";
+import { byId, estimateTierTotals, toInvoiceLines } from "./pricing";
 import { round2 } from "../format";
 
 let seq = 0;
@@ -123,12 +125,16 @@ function seedProducts(): Product[] {
   return rows.map(([name, category, unit, costPerUnit, pricePerUnit, tier, commissionRate], i) => ({
     id: `prod_${i + 1}`,
     name,
+    sku: null,
+    description: null,
     category,
     unit,
     costPerUnit,
     pricePerUnit,
     tier,
     commissionRate,
+    wasteFactor: null,
+    taxable: true,
     active: true,
   }));
 }
@@ -183,10 +189,42 @@ function li(pairs: Array<[string, number]>): LineItem[] {
   return pairs.map(([productId, qty]) => ({ productId, qty }));
 }
 
-function seedEstimates(): Estimate[] {
+/** Zero-discount default for a freshly built package. */
+function blankTierMeta(): EstimateTierMeta {
+  return { label: null, summary: null, discountType: null, discountValue: 0, discountReason: null };
+}
+
+function defaultTierMeta(): Record<Tier, EstimateTierMeta> {
+  return { Good: blankTierMeta(), Better: blankTierMeta(), Best: blankTierMeta() };
+}
+
+/** Snapshot [productId, qty] pairs into estimate lines against a live catalog,
+ *  the same way the real builder snapshots a line when it is added. */
+function estimateLines(products: Product[], pairs: Array<[string, number]>): EstimateLine[] {
+  return pairs.map(([productId, qty], i) => {
+    const p = byId(products, productId);
+    return {
+      id: `${productId}_${i}`,
+      productId,
+      name: p?.name ?? productId,
+      description: p?.description ?? null,
+      category: p?.category ?? null,
+      unit: p?.unit ?? "SF",
+      qty,
+      unitPrice: p?.pricePerUnit ?? 0,
+      unitCost: p?.costPerUnit ?? 0,
+      taxable: p?.taxable ?? true,
+      isCustom: false,
+    };
+  });
+}
+
+function seedEstimates(products: Product[]): Estimate[] {
+  const el = (pairs: Array<[string, number]>) => estimateLines(products, pairs);
   return [
     {
       id: "est_1",
+      number: "EST-2026-0001",
       leadId: "lead_1",
       repId: "u_rep_a",
       createdAt: daysAgo(14),
@@ -196,13 +234,18 @@ function seedEstimates(): Estimate[] {
       depositPercent: 35,
       acceptedTier: "Best",
       tiers: {
-        Good: li([["prod_1", 1180], ["prod_21", 1180], ["prod_13", 1180], ["prod_18", 210]]),
-        Better: li([["prod_2", 1180], ["prod_21", 1180], ["prod_13", 1180], ["prod_18", 210], ["prod_16", 34]]),
-        Best: li([["prod_3", 1180], ["prod_21", 1180], ["prod_13", 1180], ["prod_15", 1180], ["prod_19", 210], ["prod_16", 34]]),
+        Good: el([["prod_1", 1180], ["prod_21", 1180], ["prod_13", 1180], ["prod_18", 210]]),
+        Better: el([["prod_2", 1180], ["prod_21", 1180], ["prod_13", 1180], ["prod_18", 210], ["prod_16", 34]]),
+        Best: el([["prod_3", 1180], ["prod_21", 1180], ["prod_13", 1180], ["prod_15", 1180], ["prod_19", 210], ["prod_16", 34]]),
       },
+      tierMeta: defaultTierMeta(),
+      customerNotes: null,
+      internalNotes: null,
+      taxRate: 0,
     },
     {
       id: "est_2",
+      number: "EST-2026-0002",
       leadId: "lead_2",
       repId: "u_rep_a",
       createdAt: daysAgo(11),
@@ -212,13 +255,18 @@ function seedEstimates(): Estimate[] {
       depositPercent: 30,
       acceptedTier: "Better",
       tiers: {
-        Good: li([["prod_5", 96], ["prod_8", 96], ["prod_22", 96], ["prod_12", 14]]),
-        Better: li([["prod_6", 96], ["prod_8", 96], ["prod_22", 96], ["prod_12", 14], ["prod_13", 860]]),
-        Best: li([["prod_7", 96], ["prod_8", 96], ["prod_22", 96], ["prod_10", 14], ["prod_11", 14], ["prod_13", 860]]),
+        Good: el([["prod_5", 96], ["prod_8", 96], ["prod_22", 96], ["prod_12", 14]]),
+        Better: el([["prod_6", 96], ["prod_8", 96], ["prod_22", 96], ["prod_12", 14], ["prod_13", 860]]),
+        Best: el([["prod_7", 96], ["prod_8", 96], ["prod_22", 96], ["prod_10", 14], ["prod_11", 14], ["prod_13", 860]]),
       },
+      tierMeta: defaultTierMeta(),
+      customerNotes: null,
+      internalNotes: null,
+      taxRate: 0,
     },
     {
       id: "est_3",
+      number: "EST-2026-0003",
       leadId: "lead_3",
       repId: "u_rep_b",
       createdAt: daysAgo(19),
@@ -228,13 +276,18 @@ function seedEstimates(): Estimate[] {
       depositPercent: 35,
       acceptedTier: "Good",
       tiers: {
-        Good: li([["prod_1", 720], ["prod_21", 720], ["prod_15", 720], ["prod_18", 140]]),
-        Better: li([["prod_2", 720], ["prod_21", 720], ["prod_15", 720], ["prod_9", 720], ["prod_18", 140]]),
-        Best: li([["prod_3", 720], ["prod_21", 720], ["prod_15", 720], ["prod_9", 720], ["prod_19", 140], ["prod_17", 22]]),
+        Good: el([["prod_1", 720], ["prod_21", 720], ["prod_15", 720], ["prod_18", 140]]),
+        Better: el([["prod_2", 720], ["prod_21", 720], ["prod_15", 720], ["prod_9", 720], ["prod_18", 140]]),
+        Best: el([["prod_3", 720], ["prod_21", 720], ["prod_15", 720], ["prod_9", 720], ["prod_19", 140], ["prod_17", 22]]),
       },
+      tierMeta: defaultTierMeta(),
+      customerNotes: null,
+      internalNotes: null,
+      taxRate: 0,
     },
     {
       id: "est_4",
+      number: "EST-2026-0004",
       leadId: "lead_4",
       repId: "u_rep_b",
       createdAt: daysAgo(3),
@@ -244,13 +297,18 @@ function seedEstimates(): Estimate[] {
       depositPercent: 30,
       acceptedTier: null,
       tiers: {
-        Good: li([["prod_4", 940], ["prod_21", 940], ["prod_13", 940]]),
-        Better: li([["prod_2", 940], ["prod_21", 940], ["prod_13", 940], ["prod_16", 28]]),
-        Best: li([["prod_3", 940], ["prod_21", 940], ["prod_14", 940], ["prod_15", 940], ["prod_16", 28]]),
+        Good: el([["prod_4", 940], ["prod_21", 940], ["prod_13", 940]]),
+        Better: el([["prod_2", 940], ["prod_21", 940], ["prod_13", 940], ["prod_16", 28]]),
+        Best: el([["prod_3", 940], ["prod_21", 940], ["prod_14", 940], ["prod_15", 940], ["prod_16", 28]]),
       },
+      tierMeta: defaultTierMeta(),
+      customerNotes: null,
+      internalNotes: null,
+      taxRate: 0,
     },
     {
       id: "est_5",
+      number: "EST-2026-0005",
       leadId: "lead_5",
       repId: "u_rep_a",
       createdAt: daysAgo(6),
@@ -260,10 +318,14 @@ function seedEstimates(): Estimate[] {
       depositPercent: 30,
       acceptedTier: null,
       tiers: {
-        Good: li([["prod_5", 62], ["prod_8", 62], ["prod_22", 62]]),
-        Better: li([["prod_6", 62], ["prod_8", 62], ["prod_22", 62], ["prod_23", 3]]),
-        Best: li([["prod_7", 62], ["prod_8", 62], ["prod_22", 62], ["prod_23", 3], ["prod_13", 560]]),
+        Good: el([["prod_5", 62], ["prod_8", 62], ["prod_22", 62]]),
+        Better: el([["prod_6", 62], ["prod_8", 62], ["prod_22", 62], ["prod_23", 3]]),
+        Best: el([["prod_7", 62], ["prod_8", 62], ["prod_22", 62], ["prod_23", 3], ["prod_13", 560]]),
       },
+      tierMeta: defaultTierMeta(),
+      customerNotes: null,
+      internalNotes: null,
+      taxRate: 0,
     },
   ];
 }
@@ -321,7 +383,7 @@ function seedInvoices(db: Database): Invoice[] {
     const est = byId(db.estimates, job.estimateId);
     if (!est) continue;
     const tier: Tier = est.acceptedTier ?? "Better";
-    const t = totalsFor(db.products, est.tiers[tier]);
+    const t = estimateTierTotals(est.tiers[tier], est.tierMeta[tier], est.taxRate);
     const deposit = round2(t.totalPrice * (est.depositPercent / 100));
     const paidInFull = job.stage === "Completed";
     out.push({
@@ -331,7 +393,7 @@ function seedInvoices(db: Database): Invoice[] {
       leadId: job.leadId,
       repId: est.repId,
       tier,
-      lineItems: est.tiers[tier],
+      lineItems: toInvoiceLines(est.tiers[tier]),
       totalPrice: t.totalPrice,
       totalCost: t.totalCost,
       totalMargin: t.totalMargin,
@@ -365,14 +427,15 @@ function seedSyncLog(): SyncEntry[] {
 
 /** Build a clean, fully seeded database. */
 export function buildSeed(): Database {
+  const products = seedProducts();
   const db: Database = {
     version: 3,
     seededAt: new Date().toISOString(),
     settings: { defaultCommissionRate: DEFAULT_COMMISSION_RATE },
     users: seedUsers(),
-    products: seedProducts(),
+    products,
     leads: seedLeads(),
-    estimates: seedEstimates(),
+    estimates: seedEstimates(products),
     jobs: seedJobs(),
     invoices: [],
     syncLog: [],

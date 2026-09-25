@@ -27,6 +27,7 @@ export const POST = apiRoute(
     await prisma.$transaction([
       prisma.user.update({ where: { id }, data: { status: "SUSPENDED" } }),
       prisma.session.deleteMany({ where: { userId: id } }),
+      prisma.refreshToken.updateMany({ where: { userId: id, revokedAt: null }, data: { revokedAt: new Date() } }),
     ]);
 
     const { ipAddress, userAgent } = requestMeta(request);

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { verifyPassword } from "@/lib/auth/password";
-import { createSession, SESSION_COOKIE } from "@/lib/auth/session.server";
+import { issueSession, setAuthCookies } from "@/lib/auth/session.server";
 import { serializeSessionUser } from "@/lib/auth/serialize";
 import { writeAudit, requestMeta } from "@/lib/auth/audit";
 import { isLoginLocked } from "@/lib/auth/rate-limit";
@@ -16,14 +16,6 @@ const LoginSchema = z
     password: z.string().min(1),
   })
   .strict();
-
-const ABSOLUTE_COOKIE_MAX_AGE = 3 * 24 * 60 * 60; // seconds
-
-
-const cookieSecurity =
-  process.env.NODE_ENV === "production"
-    ? ({ secure: true, sameSite: "none", partitioned: true } as const)
-    : ({ secure: false, sameSite: "lax" } as const);
 
 export const POST = apiRoute(async (request: NextRequest) => {
   const json = await request.json().catch(() => null);
@@ -75,14 +67,8 @@ export const POST = apiRoute(async (request: NextRequest) => {
     });
   }
 
-  const { token, expires } = await createSession(user.id, { ipAddress, userAgent });
-  const store = await cookies();
-  store.set(SESSION_COOKIE, token, {
-    httpOnly: true,
-    ...cookieSecurity,
-    path: "/",
-    maxAge: ABSOLUTE_COOKIE_MAX_AGE,
-  });
+  const issued = await issueSession(user.id, { ipAddress, userAgent }, "password");
+  setAuthCookies(await cookies(), issued);
 
   await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
   await writeAudit({
@@ -95,8 +81,5 @@ export const POST = apiRoute(async (request: NextRequest) => {
   });
 
   const roles = user.roles.map((ur) => ur.role);
-  return NextResponse.json({
-    user: serializeSessionUser(user, roles),
-    expiresAt: expires.toISOString(),
-  });
+  return NextResponse.json({ user: serializeSessionUser(user, roles) });
 });

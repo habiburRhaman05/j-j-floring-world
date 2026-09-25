@@ -14,6 +14,7 @@ export const endpoints = {
     login: "/api/auth/login",
     logout: "/api/auth/logout",
     session: "/api/auth/session",
+    refresh: "/api/auth/refresh",
     forgotPassword: "/api/auth/forgot-password",
     resetPassword: "/api/auth/reset-password",
     acceptInvitation: "/api/auth/accept-invitation",
@@ -35,6 +36,22 @@ export const endpoints = {
       pipelines: "/api/settings/integrations/ghl/pipelines",
       tagCheck: (tag: string) => `/api/settings/integrations/ghl/tag-check?tag=${encodeURIComponent(tag)}`,
     },
+  },
+
+  setup: {
+    status: "/api/setup/status",
+    verify: "/api/setup/verify",
+    complete: "/api/setup/complete",
+  },
+
+  /** The CSR dashboard: GHL pipelines, their opportunities, and fb-lead contacts. */
+  csr: {
+    pipelines: "/api/csr/pipelines",
+    opportunities: (pipelineId: string) =>
+      `/api/csr/pipelines/${encodeURIComponent(pipelineId)}/opportunities`,
+    moveStage: (opportunityId: string) =>
+      `/api/csr/opportunities/${encodeURIComponent(opportunityId)}/stage`,
+    fbLeads: "/api/csr/fb-leads",
   },
 
   /** The whole workspace in one payload. */

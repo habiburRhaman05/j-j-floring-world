@@ -29,7 +29,12 @@ export function AdminSync({ db }: { db: Database }) {
               Stubbed GoHighLevel integration. No network calls are made.
             </div>
           </div>
-          <Button size="sm" variant="ghost" onClick={() => clearSyncLog.mutate()}>
+          <Button
+            size="sm"
+            variant="ghost"
+            loading={clearSyncLog.isPending}
+            onClick={() => clearSyncLog.mutate()}
+          >
             Clear
           </Button>
         </PanelHead>
@@ -76,9 +81,11 @@ export function AdminSync({ db }: { db: Database }) {
               Reset demo data
             </Button>
             <Button
+              loading={simulateInbound.isPending}
               onClick={() => {
-                simulateInbound.mutate();
-                toast("Inbound event logged.");
+                simulateInbound.mutate(undefined, {
+                  onSuccess: () => toast("Inbound event logged."),
+                });
               }}
             >
               Simulate inbound GHL event
@@ -97,8 +104,12 @@ export function AdminSync({ db }: { db: Database }) {
           {
             label: "Reset",
             variant: "danger",
-            onClick: () => {
-              resetDemoData.mutate();
+            onClick: async () => {
+              try {
+                await resetDemoData.mutateAsync();
+              } catch {
+                return false;
+              }
               toast("Demo data reset.", "ok");
             },
           },

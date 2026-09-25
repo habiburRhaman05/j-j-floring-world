@@ -31,7 +31,8 @@ export const PUT = apiRoute(
       return errorResponse(404, "That product no longer exists.", { code: "not_found" });
     }
 
-    const { name, category, unit, costPerUnit, pricePerUnit, tier, active } = parsed.data;
+    const { name, sku, description, category, unit, costPerUnit, pricePerUnit, tier, active, wasteFactor, taxable } =
+      parsed.data;
     const key = categoryKey(category);
     const priceChanged =
       Number(existing.costPerUnit) !== costPerUnit ||
@@ -48,11 +49,15 @@ export const PUT = apiRoute(
         where: { id },
         data: {
           name,
+          sku: sku || null,
+          description: description || null,
           categoryId: categoryRow.id,
           unit: unitToDb(unit),
           costPerUnit,
           pricePerUnit,
           tierAffinity: tierToDb(tier),
+          wasteFactor: wasteFactor ?? null,
+          ...(typeof taxable === "boolean" ? { taxable } : {}),
           ...(typeof active === "boolean" ? { active } : {}),
         },
         include: { category: true },

@@ -46,24 +46,29 @@ export function NewLeadDialog({ db, meId, onClose }: NewLeadDialogProps) {
           label: "Create lead",
           variant: "primary",
           keep: true,
-          onClick: (close) => {
+          onClick: async (close) => {
             if (!name.trim()) {
               toast("Name is required.", "warn");
               return false;
             }
-            addLead.mutate([
-              {
-                name: name.trim(),
-                phone: phone.trim(),
-                email: email.trim(),
-                address: address.trim(),
-                zipCode: zip.trim(),
-                source,
-                assignedRepId: repId,
-                note: note.trim(),
-                by: meId,
-              },
-            ]);
+            try {
+              await addLead.mutateAsync([
+                {
+                  name: name.trim(),
+                  phone: phone.trim(),
+                  email: email.trim(),
+                  address: address.trim(),
+                  zipCode: zip.trim(),
+                  source,
+                  assignedRepId: repId,
+                  note: note.trim(),
+                  by: meId,
+                },
+              ]);
+            } catch {
+              // The mutation hook has already reported why; keep the form open.
+              return false;
+            }
             toast("Lead created.", "ok");
             close();
           },

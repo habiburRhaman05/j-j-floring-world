@@ -39,7 +39,7 @@ export function UserFormDialog({ user, onClose }: UserFormDialogProps) {
           label: "Save",
           variant: "primary",
           keep: true,
-          onClick: (close) => {
+          onClick: async (close) => {
             if (!name.trim()) {
               toast("Name is required.", "warn");
               return false;
@@ -49,15 +49,20 @@ export function UserFormDialog({ user, onClose }: UserFormDialogProps) {
               toast("A valid sign-in email is required.", "warn");
               return false;
             }
-            saveUser.mutate([
-              {
-                id: user?.id ?? null,
-                name: name.trim(),
-                email: email.trim().toLowerCase(),
-                role,
-                commissionRate: rate,
-              },
-            ]);
+            try {
+              await saveUser.mutateAsync([
+                {
+                  id: user?.id ?? null,
+                  name: name.trim(),
+                  email: email.trim().toLowerCase(),
+                  role,
+                  commissionRate: rate,
+                },
+              ]);
+            } catch {
+              // The mutation hook has already reported why; keep the form open.
+              return false;
+            }
             toast("User saved.", "ok");
             close();
           },

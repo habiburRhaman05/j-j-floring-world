@@ -43,14 +43,16 @@ export function StatusButtons({ job }: { job: Job }) {
             size="sm"
             variant={done ? "ghost" : live ? "go" : "default"}
             aria-disabled={live ? undefined : "true"}
+            loading={live && setJobStage.isPending}
             onClick={() => {
-              if (!live) return;
+              if (!live || setJobStage.isPending) return;
               if (step.to === "Completed" && !job.materialsReceived) {
                 toast("Confirm materials received before closing the job.", "warn");
                 return;
               }
-              setJobStage.mutate([job.id, step.to]);
-              toast(step.label.replace("Mark ", "Status: "), "ok");
+              setJobStage.mutate([job.id, step.to], {
+                onSuccess: () => toast(step.label.replace("Mark ", "Status: "), "ok"),
+              });
             }}
           >
             {done ? `${step.to} \u2713` : step.label}

@@ -35,6 +35,7 @@ export const GET = apiRoute(async () => {
       lastName: u.lastName,
       status: u.status,
       lastLoginAt: u.lastLoginAt,
+      ghlRole: u.ghlRole,
       roles: u.roles.map((ur) => ({ id: ur.role.id, key: ur.role.key, name: ur.role.name })),
     })),
     invitations: invitations.map((i) => ({

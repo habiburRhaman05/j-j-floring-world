@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { getCurrentSession } from "@/lib/auth/session.server";
+import { getCurrentSession, revokeAllForUser } from "@/lib/auth/session.server";
 import { hashPassword, verifyPassword, MIN_PASSWORD_LENGTH } from "@/lib/auth/password";
 import { writeAudit, requestMeta } from "@/lib/auth/audit";
 import { errorResponse, zodErrorResponse } from "@/lib/api/server-response";
@@ -36,16 +36,12 @@ export const POST = apiRoute(async (request: NextRequest) => {
 
   const passwordHash = await hashPassword(parsed.data.newPassword);
 
-  await prisma.$transaction([
-    prisma.user.update({
-      where: { id: session.user.id },
-      data: { passwordHash, mustChangePassword: false },
-    }),
-    // Keep the current session alive; drop every other one.
-    prisma.session.deleteMany({
-      where: { userId: session.user.id, id: { not: session.sessionId } },
-    }),
-  ]);
+  await prisma.user.update({
+    where: { id: session.user.id },
+    data: { passwordHash, mustChangePassword: false },
+  });
+  // Keep the login in use right now; sign out every other device.
+  await revokeAllForUser(session.user.id, session.familyId);
 
   const { ipAddress, userAgent } = requestMeta(request);
   await writeAudit({
