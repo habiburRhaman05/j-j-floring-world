@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { ReactNode } from "react";
 import type { NavEntry } from "@/lib/navigation";
 
 interface TabStripProps {
@@ -9,6 +10,8 @@ interface TabStripProps {
   ariaLabel: string;
   items: NavEntry[];
   active: string;
+  /** Right-hand actions: the page's own buttons and Account. */
+  extras?: ReactNode;
 }
 
 /**
@@ -20,7 +23,7 @@ interface TabStripProps {
  * Destinations are real links, so each tab has a URL you can share, bookmark,
  * middle-click or open in a new tab.
  */
-export function TabStrip({ moduleLabel, ariaLabel, items, active }: TabStripProps) {
+export function TabStrip({ moduleLabel, ariaLabel, items, active, extras }: TabStripProps) {
   return (
     <div className="subnav">
       <div className="subnav-inner">
@@ -42,6 +45,7 @@ export function TabStrip({ moduleLabel, ariaLabel, items, active }: TabStripProp
             );
           })}
         </nav>
+        {extras ? <div className="subnav-end">{extras}</div> : null}
       </div>
     </div>
   );

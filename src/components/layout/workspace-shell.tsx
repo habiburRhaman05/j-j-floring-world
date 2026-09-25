@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { RoleGuard } from "@/components/providers/session-provider";
 import { activeNavKey, activeNavLabel, type NavEntry } from "@/lib/navigation";
+import { AccountButton } from "./account-button";
 import { cn } from "@/lib/utils";
 import type { Role } from "@/lib/types";
 import { AppBar } from "./app-bar";
@@ -80,21 +81,25 @@ function Shell({
   return (
     <div className="app">
       <div className="shell">
-        <AppBar
-          role={role}
-          title={activeNavLabel(pathname, items)}
-          solo={nav === "bottom"}
-          extras={headerExtras}
-        />
-
+        {/* The tabbed workspaces show only the navigation row, with the page's
+            actions and Account at its right. The Installer's phone layout has
+            no tabs, so it keeps the top bar for its title and Account. */}
         {nav === "tabs" ? (
           <TabStrip
             moduleLabel={moduleLabel ?? ""}
             ariaLabel={ariaLabel}
             items={items}
             active={active}
+            extras={
+              <>
+                {headerExtras}
+                <AccountButton />
+              </>
+            }
           />
-        ) : null}
+        ) : (
+          <AppBar role={role} title={activeNavLabel(pathname, items)} solo extras={headerExtras} />
+        )}
 
         <main className={cn("main", mainClassName)}>{children}</main>
       </div>
