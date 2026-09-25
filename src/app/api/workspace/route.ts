@@ -5,6 +5,9 @@ import { requireApiUser } from "@/lib/auth/require-api-user";
 import { resolveConnection, fetchLiveLeads, GhlNotConfiguredError } from "@/lib/ghl/leads-sync";
 import { DEFAULT_COMMISSION_RATE } from "@/lib/constants";
 import { toProduct } from "@/lib/products/map";
+import { listEstimatesForViewer } from "@/lib/estimates/estimates.server";
+import { syncEstimateDocuments } from "@/lib/estimates/lifecycle.server";
+import { getGhlConnection } from "@/lib/ghl/client";
 import type { Database, Role, User } from "@/lib/types";
 
 const ROLE_LABEL: Record<string, Role> = {
@@ -16,10 +19,9 @@ const ROLE_LABEL: Record<string, Role> = {
 
 /**
  * The workspace snapshot the frontend already expects (Database shape).
- * Leads come from GHL live. Products come from the catalog table. Estimates,
- * jobs and invoices are real tables too but not wired into this snapshot yet -
- * empty here on purpose, not a bug, that is the next slice of work after CSR
- * intake.
+ * Leads come from GHL live. Products come from the catalog table. Estimates
+ * come from Postgres, scoped per role. Jobs and invoices are real tables too
+ * but not wired into this snapshot yet.
  */
 export const GET = apiRoute(async () => {
   const gate = await requireApiUser();
@@ -59,6 +61,30 @@ export const GET = apiRoute(async () => {
     }
   }
 
+  // Estimates live in Postgres: an admin gets all, a rep their own, nobody else any.
+  const roleKeys = gate.session.roles.map((r) => r.key);
+  const isAdmin = roleKeys.includes("admin");
+  let estimates: Database["estimates"] = [];
+  if (isAdmin || roleKeys.includes("sales_rep")) {
+    const viewer = { userId: gate.session.user.id, isAdmin, ghlUserId: gate.session.user.ghlUserId };
+    // Pick up signatures the customer made since the last load; failure just leaves statuses as they were.
+    try {
+      const connection = await getGhlConnection();
+      if (connection) await syncEstimateDocuments(connection, viewer);
+    } catch (error) {
+      console.error("[workspace] estimate document sync failed:", error);
+    }
+    const result = await listEstimatesForViewer({
+      userId: gate.session.user.id,
+      isAdmin,
+      ghlUserId: gate.session.user.ghlUserId,
+    });
+    estimates = result.estimates;
+    // Customers an estimate was written for, when the live lead list does not already have them.
+    const known = new Set(leads.map((l) => l.id));
+    leads = [...leads, ...result.leads.filter((l) => !known.has(l.id))];
+  }
+
   const db: Database = {
     version: 1,
     seededAt: new Date().toISOString(),
@@ -66,7 +92,7 @@ export const GET = apiRoute(async () => {
     users,
     products: dbProducts.map(toProduct),
     leads,
-    estimates: [],
+    estimates,
     jobs: [],
     invoices: [],
     syncLog: [],

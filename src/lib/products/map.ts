@@ -56,6 +56,14 @@ const TIER_TO_DB: Record<Tier, TierLevel> = {
   Best: "BEST",
 };
 
+export function unitFromDb(unit: UnitOfMeasure): Unit {
+  return UNIT_FROM_DB[unit];
+}
+
+export function tierFromDb(tier: TierLevel): Tier {
+  return TIER_FROM_DB[tier];
+}
+
 export function unitToDb(unit: Unit): UnitOfMeasure {
   return UNIT_TO_DB[unit];
 }

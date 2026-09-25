@@ -12,14 +12,19 @@ import type {
 } from "@/lib/csr/types";
 import { cn } from "@/lib/utils";
 
-interface PipelineBoardProps {
+interface PipelineBoardProps<T extends CsrBoardOpportunity> {
   pipeline: CsrBoardPipeline;
-  opportunities: CsrBoardOpportunity[];
+  opportunities: T[];
   locationId: string;
   /** Opportunity ids whose move is still being written to GHL. */
   movingIds: ReadonlySet<string>;
-  onMove: (opportunity: CsrBoardOpportunity, stageId: string) => void;
+  onMove: (opportunity: T, stageId: string) => void;
+  /** Who owns a card, shown on it (the admin sales board). */
+  ownerOf?: (opportunity: T) => string | null;
 }
+
+/** Won/lost cards get the board's won/lost accent and a status pill. */
+const STATUS_TILE: Record<string, string> = { won: "won", lost: "lost", abandoned: "lost" };
 
 /** A stage GHL no longer lists but an opportunity still points at. */
 const ORPHAN_STAGE_ID = "__unknown__";
@@ -28,13 +33,14 @@ const ORPHAN_STAGE_ID = "__unknown__";
  * GHL's opportunities board: one column per stage, each headed by its count
  * and total value. Cards drag between columns; the drop is written to GHL.
  */
-export function PipelineBoard({
+export function PipelineBoard<T extends CsrBoardOpportunity>({
   pipeline,
   opportunities,
   locationId,
   movingIds,
   onMove,
-}: PipelineBoardProps) {
+  ownerOf,
+}: PipelineBoardProps<T>) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [overStageId, setOverStageId] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -108,11 +114,14 @@ export function PipelineBoard({
               <div className="col-body">
                 {items.map((opportunity) => {
                   const moving = movingIds.has(opportunity.id);
+                  const owner = ownerOf?.(opportunity) ?? null;
+                  const status = opportunity.status?.toLowerCase() ?? "open";
                   return (
                     <div
                       key={opportunity.id}
                       className={cn(
                         "tile",
+                        STATUS_TILE[status],
                         draggingId === opportunity.id && "dragging",
                         moving && "tile-saving",
                       )}
@@ -139,6 +148,12 @@ export function PipelineBoard({
                         <div className="tile-meta">{opportunity.phone || opportunity.email}</div>
                       ) : null}
                       <div className="tile-foot">
+                        {status !== "open" ? (
+                          <Pill className={status === "won" ? "pill-moss" : "pill-clay"}>
+                            {status[0]!.toUpperCase() + status.slice(1)}
+                          </Pill>
+                        ) : null}
+                        {owner ? <Pill className="pill-blue">{owner}</Pill> : null}
                         {opportunity.value > 0 ? (
                           <Pill className="pill-moss">{money2(opportunity.value)}</Pill>
                         ) : null}
@@ -198,7 +213,7 @@ function OpportunityDialog({
   locationId,
   onClose,
 }: {
-  opportunity: CsrBoardOpportunity;
+  opportunity: CsrBoardOpportunity & { ownerName?: string };
   pipeline: CsrBoardPipeline;
   locationId: string;
   onClose: () => void;
@@ -229,6 +244,12 @@ function OpportunityDialog({
         <dd>{money2(opportunity.value)}</dd>
         <dt>Status</dt>
         <dd style={{ textTransform: "capitalize" }}>{opportunity.status}</dd>
+        {opportunity.ownerName ? (
+          <>
+            <dt>Assigned to</dt>
+            <dd>{opportunity.ownerName}</dd>
+          </>
+        ) : null}
         <dt>Opportunity</dt>
         <dd>{opportunity.name}</dd>
         <dt>Created</dt>

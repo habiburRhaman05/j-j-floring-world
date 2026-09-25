@@ -1,11 +1,11 @@
 "use client";
 
+import { EstimateStatusPill } from "@/components/estimator/estimate-status";
 import { useState } from "react";
 import { useToast } from "@/components/providers/toast-provider";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
-import { StagePill } from "@/components/ui/pill";
 import { StageSelect } from "@/components/pipeline/stage-select";
 import { useAddLeadNote, useSetLeadStage } from "@/lib/data/hooks";
 import { estimatesForLead } from "@/lib/data/selectors";
@@ -111,9 +111,9 @@ export function RepLeadDialog({
               </div>
             </div>
             <div className="row">
-              <StagePill stage={estimate.status} />
+              <EstimateStatusPill status={estimate.status} />
               <Button size="sm" onClick={() => onOpenEstimate(estimate.id)}>
-                {estimate.status === "Signed" ? "View" : "Sign sheet"}
+                View
               </Button>
             </div>
           </div>

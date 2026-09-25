@@ -18,7 +18,7 @@
 
 generator client {
   provider        = "prisma-client-js"
-  previewFeatures = ["fullTextSearchPostgres"]
+  previewFeatures = ["fullTextSearchPostgres", "relationJoins"]
 }
 
 datasource db {
@@ -972,6 +972,8 @@ model Estimate {
 
   /// Which tier the customer accepted. Null until signed.
   acceptedTier   TierLevel?
+  /// The package the GHL document was sent for (what the customer is asked to sign)
+  sentTier       TierLevel?
   depositPercent Decimal    @default(30.00) @db.Decimal(5, 2)
   taxRate        Decimal    @default(0) @db.Decimal(6, 4)
   validUntil     DateTime?
@@ -1056,6 +1058,9 @@ model EstimateLineItem {
   taxable     Boolean       @default(true)
   /// Free-text line not drawn from the price book
   isCustom    Boolean       @default(false)
+  /// The GoHighLevel product / price the line was added from (GHL is the price book)
+  ghlProductId String?
+  ghlPriceId   String?
   sortOrder   Int           @default(0)
 
   createdAt DateTime @default(now())

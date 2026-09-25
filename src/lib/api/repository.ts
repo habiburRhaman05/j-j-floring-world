@@ -59,13 +59,13 @@ export interface WorkspaceRepository {
 
   /* estimates */
   saveEstimate(fields: EstimateInput): Promise<Estimate>;
-  sendEstimate(estimateId: string): Promise<Estimate | null>;
+  sendEstimate(estimateId: string, tier?: Tier): Promise<Estimate | null>;
   markEstimateViewed(estimateId: string): Promise<Estimate | null>;
   signEstimate(
     estimateId: string,
     typedName: string,
     tier: Tier,
-  ): Promise<{ estimate: Estimate; job: Job; invoice: Invoice } | null>;
+  ): Promise<{ estimate: Estimate; job: Job | null; invoice: Invoice | null } | null>;
 
   /* jobs */
   setJobStage(jobId: string, stage: Job["stage"]): Promise<Job | null>;
@@ -171,14 +171,27 @@ export function createHttpRepository(): WorkspaceRepository {
         : apiPost<User>(endpoints.users.create, fields),
     removeUser: (userId) => apiDelete<boolean>(endpoints.users.detail(userId)),
 
-    // Estimates, jobs, invoices and the sync/demo controls have no Route
-    // Handlers yet (only the mock store implements them). Failing here with a
-    // plain explanation beats a request that 404s into "That record no longer
+    saveEstimate: (fields) =>
+      fields.id
+        ? apiPut<Estimate>(endpoints.estimates.detail(fields.id), fields)
+        : apiPost<Estimate>(endpoints.estimates.create, fields),
+    sendEstimate: (estimateId, tier) =>
+      apiPost<Estimate | null>(endpoints.estimates.send(estimateId), { tier: tier ?? "Better" }),
+    // Only the customer can approve, by signing the GHL document: an opened
+    // estimate is picked up when the workspace loads, and there is no in-app sign.
+    markEstimateViewed: async () => null,
+    signEstimate: () =>
+      Promise.reject(
+        new ApiError("An estimate is approved when the customer signs the document GoHighLevel emailed them.", {
+          status: 405,
+          code: "sign_disabled",
+        }),
+      ),
+
+    // Jobs, invoices and the sync/demo controls have no Route Handlers yet
+    // (only the mock store implements them). Failing here with a plain
+    // explanation beats a request that 404s into "That record no longer
     // exists". Replace each with its apiX call as the route lands.
-    saveEstimate: () => notConnected("Estimates are"),
-    sendEstimate: () => notConnected("Estimates are"),
-    markEstimateViewed: () => notConnected("Estimates are"),
-    signEstimate: () => notConnected("Estimates are"),
 
     setJobStage: () => notConnected("Jobs are"),
     assignInstaller: () => notConnected("Jobs are"),

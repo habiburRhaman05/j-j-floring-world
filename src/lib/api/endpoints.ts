@@ -44,6 +44,15 @@ export const endpoints = {
     complete: "/api/setup/complete",
   },
 
+  /** GHL "Sales Pipeline" dashboards (admin: everyone, rep: their own). */
+  sales: {
+    board: "/api/sales/board",
+    moveStage: (opportunityId: string) =>
+      `/api/sales/opportunities/${encodeURIComponent(opportunityId)}/stage`,
+    rates: "/api/sales/rates",
+    products: "/api/sales/products",
+  },
+
   /** The CSR dashboard: GHL pipelines, their opportunities, and fb-lead contacts. */
   csr: {
     pipelines: "/api/csr/pipelines",
@@ -87,8 +96,7 @@ export const endpoints = {
     create: "/api/estimates",
     detail: (estimateId: string) => `/api/estimates/${estimateId}`,
     send: (estimateId: string) => `/api/estimates/${estimateId}/send`,
-    viewed: (estimateId: string) => `/api/estimates/${estimateId}/viewed`,
-    sign: (estimateId: string) => `/api/estimates/${estimateId}/sign`,
+    sync: "/api/estimates/sync",
   },
 
   jobs: {

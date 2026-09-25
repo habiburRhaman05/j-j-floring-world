@@ -26,7 +26,15 @@ export async function withCsrConnection(): Promise<
   }
 }
 
+/**
+ * A GoHighLevel refusal ("GHL 4xx on /path: ...") is shown as-is, so the
+ * user can see what GHL objected to. Anything else - a database error, a bug -
+ * is rethrown to apiRoute, which logs it and answers with a plain message,
+ * so internals never reach the screen.
+ */
 export function ghlFailure(error: unknown): NextResponse {
-  const message = error instanceof Error ? error.message : "Unknown error reaching GoHighLevel.";
-  return errorResponse(502, message, { code: "ghl_request_failed" });
+  if (error instanceof Error && /^GHL \d{3} /.test(error.message)) {
+    return errorResponse(502, error.message, { code: "ghl_request_failed" });
+  }
+  throw error;
 }

@@ -202,9 +202,31 @@ export interface GhlOpportunity {
   status: string;
   monetaryValue?: number;
   contactId: string;
+  /** GHL user id of the owner ("Owner" on the card). Often null - see sales-board.ts. */
+  assignedTo?: string | null;
+  /** GHL user ids following the opportunity. */
+  followers?: string[];
+  source?: string | null;
   createdAt?: string;
   updatedAt?: string;
+  /** When the status last changed - for a won or lost deal, when it closed. */
+  lastStatusChangeAt?: string | null;
+  lastStageChangeAt?: string | null;
   contact?: { id?: string; name?: string; email?: string; phone?: string; tags?: string[] };
+}
+
+/** GET /opportunities/:id - one opportunity, for checking who owns it before a change. */
+export async function getOpportunity(connection: GhlConnection, opportunityId: string): Promise<GhlOpportunity | null> {
+  try {
+    const data = await ghlFetch<{ opportunity?: GhlOpportunity }>(
+      connection,
+      `/opportunities/${encodeURIComponent(opportunityId)}`,
+    );
+    return data.opportunity ?? null;
+  } catch (error) {
+    if (error instanceof Error && /GHL (400|404|422) /.test(error.message)) return null;
+    throw error;
+  }
 }
 
 /**
@@ -258,24 +280,28 @@ export interface GhlContact {
   tags?: string[];
   dateAdded?: string;
   source?: string;
+  /** All-channel do-not-disturb, and the per-channel state ({ Email: { status: "active" | "inactive" | "permanent" } }). */
+  dnd?: boolean;
+  dndSettings?: Record<string, { status?: string; message?: string; code?: string } | undefined>;
+  /** GHL user id the contact is assigned to. */
+  assignedTo?: string | null;
 }
 
 /**
- * Every contact carrying a given tag (e.g. "fb-lead").
+ * Every contact in the location, paged 100 at a time (capped at 2,000 -
+ * raise MAX_PAGES if this location grows past that).
  *
  * GHL's POST /contacts/search "filters" DSL is thinly documented and did not
- * match tags reliably against a live account (confirmed: a contact visibly
- * tagged "fb-lead" in the GHL UI came back as zero results). Fetching pages
- * of contacts and filtering by tag ourselves, case-insensitively, is slower
- * but correct - no dependency on guessing GHL's exact filter syntax.
+ * match tags reliably against a live account (a contact visibly tagged
+ * "fb-lead" in the GHL UI came back as zero results), so callers filter the
+ * full list themselves - slower, but no guessing at GHL's filter syntax.
  */
-export async function searchContactsByTag(connection: GhlConnection, tag: string): Promise<GhlContact[]> {
-  const needle = tag.trim().toLowerCase();
-  const matches: GhlContact[] = [];
+export async function listAllContacts(connection: GhlConnection): Promise<GhlContact[]> {
+  const all: GhlContact[] = [];
   let startAfter: string | undefined;
   let startAfterId: string | undefined;
   const PAGE_SIZE = 100;
-  const MAX_PAGES = 20; // 2,000 contacts - raise if this location is bigger
+  const MAX_PAGES = 20;
 
   for (let page = 0; page < MAX_PAGES; page++) {
     const params = new URLSearchParams({
@@ -290,10 +316,7 @@ export async function searchContactsByTag(connection: GhlConnection, tag: string
       `/contacts/?${params.toString()}`,
     );
     const contacts = data.contacts ?? [];
-    for (const contact of contacts) {
-      const tags = (contact.tags ?? []).map((t) => t.trim().toLowerCase());
-      if (tags.includes(needle)) matches.push(contact);
-    }
+    all.push(...contacts);
 
     if (contacts.length < PAGE_SIZE) break; // last page
     const last = contacts[contacts.length - 1];
@@ -303,7 +326,25 @@ export async function searchContactsByTag(connection: GhlConnection, tag: string
     if (!startAfterId) break;
   }
 
-  return matches;
+  return all;
+}
+
+/** GET /contacts/:id - one contact, or null when GHL does not know it. */
+export async function getContact(connection: GhlConnection, contactId: string): Promise<GhlContact | null> {
+  try {
+    const data = await ghlFetch<{ contact?: GhlContact }>(connection, `/contacts/${encodeURIComponent(contactId)}`);
+    return data.contact ?? null;
+  } catch (error) {
+    if (error instanceof Error && /GHL (400|404|422) /.test(error.message)) return null;
+    throw error;
+  }
+}
+
+/** Every contact carrying a given tag (e.g. "fb-lead"), matched case-insensitively. */
+export async function searchContactsByTag(connection: GhlConnection, tag: string): Promise<GhlContact[]> {
+  const needle = tag.trim().toLowerCase();
+  const contacts = await listAllContacts(connection);
+  return contacts.filter((c) => (c.tags ?? []).some((t) => t.trim().toLowerCase() === needle));
 }
 
 /** PUT /opportunities/:id - moves a card to a different stage (drag-and-drop lands here). */
@@ -316,6 +357,30 @@ export async function updateOpportunityStage(
   await ghlFetch(connection, `/opportunities/${opportunityId}`, {
     method: "PUT",
     body: JSON.stringify({ pipelineStageId, ...(pipelineId ? { pipelineId } : {}) }),
+  });
+}
+
+/** PUT /opportunities/:id - value and/or stage. */
+export async function updateOpportunity(
+  connection: GhlConnection,
+  opportunityId: string,
+  fields: { pipelineId: string; pipelineStageId?: string; monetaryValue?: number },
+): Promise<void> {
+  await ghlFetch(connection, `/opportunities/${encodeURIComponent(opportunityId)}`, {
+    method: "PUT",
+    body: JSON.stringify(fields),
+  });
+}
+
+/** PUT /opportunities/:id/status - open, won, lost or abandoned. */
+export async function updateOpportunityStatus(
+  connection: GhlConnection,
+  opportunityId: string,
+  status: "open" | "won" | "lost" | "abandoned",
+): Promise<void> {
+  await ghlFetch(connection, `/opportunities/${encodeURIComponent(opportunityId)}/status`, {
+    method: "PUT",
+    body: JSON.stringify({ status }),
   });
 }
 
@@ -468,4 +533,194 @@ export async function getGhlUser(connection: GhlConnection, userId: string): Pro
 /** "account:admin", "account:user" - what the user is in GHL, stored next to their app role. */
 export function ghlRoleOf(user: GhlUser): string {
   return `${user.roles?.type ?? "unknown"}:${user.roles?.role ?? "unknown"}`;
+}
+
+/* ==========================================================================
+   Estimate documents - GHL Documents & Contracts (proposal templates).
+   The estimate's details are written to the contact's custom fields, then a
+   saved template is sent to that contact; the template shows them through
+   merge tags such as {{contact.estimate___total}}.
+   ========================================================================== */
+
+export interface GhlCustomField {
+  id: string;
+  name: string;
+  fieldKey: string;
+  dataType: string;
+}
+
+/** GET /locations/:id/customFields - the contact fields of the location. */
+export async function listContactCustomFields(connection: GhlConnection): Promise<GhlCustomField[]> {
+  const data = await ghlFetch<{ customFields?: GhlCustomField[] }>(
+    connection,
+    `/locations/${encodeURIComponent(connection.locationId)}/customFields?model=contact`,
+  );
+  return data.customFields ?? [];
+}
+
+/** POST /locations/:id/customFields - adds one contact field. */
+export async function createContactCustomField(
+  connection: GhlConnection,
+  field: { name: string; dataType: "TEXT" | "LARGE_TEXT" },
+): Promise<GhlCustomField> {
+  const data = await ghlFetch<{ customField?: GhlCustomField }>(
+    connection,
+    `/locations/${encodeURIComponent(connection.locationId)}/customFields`,
+    { method: "POST", body: JSON.stringify({ ...field, model: "contact" }) },
+  );
+  if (!data.customField) throw new Error(`GoHighLevel did not create the "${field.name}" field.`);
+  return data.customField;
+}
+
+/** PUT /contacts/:id - sets custom field values by field id. */
+export async function setContactCustomFields(
+  connection: GhlConnection,
+  contactId: string,
+  values: { id: string; value: string | number }[],
+): Promise<void> {
+  await ghlFetch(connection, `/contacts/${encodeURIComponent(contactId)}`, {
+    method: "PUT",
+    body: JSON.stringify({ customFields: values.map((v) => ({ id: v.id, field_value: v.value })) }),
+  });
+}
+
+export interface GhlProposalTemplate {
+  id: string;
+  name: string;
+  type?: string;
+}
+
+/** GET /proposals/templates - the saved Documents & Contracts templates. */
+export async function listProposalTemplates(connection: GhlConnection): Promise<GhlProposalTemplate[]> {
+  // GHL rejects a page bigger than 20 (422), so walk the pages.
+  const PAGE = 20;
+  const all: GhlProposalTemplate[] = [];
+  for (let skip = 0; skip < 400; skip += PAGE) {
+    const data = await ghlFetch<{ data?: { _id?: string; id?: string; name: string; type?: string; deleted?: boolean }[] }>(
+      connection,
+      `/proposals/templates?locationId=${encodeURIComponent(connection.locationId)}&limit=${PAGE}&skip=${skip}`,
+    );
+    const page = data.data ?? [];
+    all.push(...page.filter((t) => !t.deleted).map((t) => ({ id: (t.id ?? t._id)!, name: t.name, type: t.type })));
+    if (page.length < PAGE) break;
+  }
+  return all;
+}
+
+export interface GhlSentDocument {
+  documentId: string | null;
+  url: string | null;
+  raw: unknown;
+}
+
+/**
+ * POST /proposals/templates/send - creates a document from a template for a
+ * contact. With `send: false` the document is created but not delivered.
+ */
+export async function sendProposalTemplate(
+  connection: GhlConnection,
+  input: { templateId: string; contactId: string; userId: string; send: boolean; opportunityId?: string },
+): Promise<GhlSentDocument> {
+  const data = await ghlFetch<{
+    success?: boolean;
+    documentId?: string;
+    document?: { _id?: string; id?: string };
+    links?: { documentId?: string; url?: string; recipientEmail?: string }[];
+    [key: string]: unknown;
+  }>(connection, "/proposals/templates/send", {
+    method: "POST",
+    body: JSON.stringify({
+      locationId: connection.locationId,
+      templateId: input.templateId,
+      contactId: input.contactId,
+      userId: input.userId,
+      sendDocument: input.send,
+      ...(input.opportunityId ? { opportunityId: input.opportunityId } : {}),
+    }),
+  });
+  const link = data.links?.[0];
+  return {
+    documentId: data.document?._id ?? data.document?.id ?? data.documentId ?? link?.documentId ?? null,
+    url: link?.url ?? null,
+    raw: data,
+  };
+}
+
+export interface GhlDocument {
+  id: string;
+  name: string;
+  status: string;
+  raw: Record<string, unknown>;
+}
+
+/** GET /proposals/document - documents in the location, newest first. */
+export async function listDocuments(connection: GhlConnection, maxPages = 5): Promise<GhlDocument[]> {
+  // GHL rejects a page bigger than 20 (422), so walk the pages.
+  const PAGE = 20;
+  const out: GhlDocument[] = [];
+  for (let page = 0; page < maxPages; page++) {
+    const data = await ghlFetch<{ documents?: Record<string, unknown>[] }>(
+      connection,
+      `/proposals/document?locationId=${encodeURIComponent(connection.locationId)}&limit=${PAGE}&skip=${page * PAGE}`,
+    );
+    const docs = data.documents ?? [];
+    out.push(
+      ...docs.map((d) => ({
+        id: String(d._id ?? d.id),
+        name: String(d.name ?? ""),
+        status: String(d.status ?? d.documentStatus ?? "").toLowerCase(),
+        raw: d,
+      })),
+    );
+    if (docs.length < PAGE) break;
+  }
+  return out;
+}
+
+/* ==========================================================================
+   Products - GHL Payments > Products is the estimate builder's price book.
+   ========================================================================== */
+
+export interface GhlProduct {
+  _id: string;
+  name: string;
+  description?: string;
+  image?: string;
+  productType?: string;
+  status?: string;
+}
+
+export interface GhlPrice {
+  _id: string;
+  name: string;
+  type?: string;
+  currency?: string;
+  amount: number;
+  compareAtPrice?: number;
+  deleted?: boolean;
+}
+
+/** GET /products/ - every product, walked 20 at a time. */
+export async function listProducts(connection: GhlConnection): Promise<GhlProduct[]> {
+  const PAGE = 20;
+  const all: GhlProduct[] = [];
+  for (let offset = 0; offset < 2000; offset += PAGE) {
+    const data = await ghlFetch<{ products?: GhlProduct[] }>(
+      connection,
+      `/products/?locationId=${encodeURIComponent(connection.locationId)}&limit=${PAGE}&offset=${offset}`,
+    );
+    const page = data.products ?? [];
+    all.push(...page);
+    if (page.length < PAGE) break;
+  }
+  return all;
+}
+
+/** GET /products/:id/price - the prices of one product. */
+export async function listProductPrices(connection: GhlConnection, productId: string): Promise<GhlPrice[]> {
+  const data = await ghlFetch<{ prices?: GhlPrice[] }>(
+    connection,
+    `/products/${encodeURIComponent(productId)}/price?locationId=${encodeURIComponent(connection.locationId)}&limit=20&offset=0`,
+  );
+  return data.prices ?? [];
 }

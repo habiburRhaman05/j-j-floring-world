@@ -95,40 +95,13 @@ export const PATCH = apiRoute(
   },
 );
 
-export const DELETE = apiRoute(
-  async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
-    const gate = await requireAdmin();
-    if (gate.error) return gate.error;
-    const { session } = gate;
-    const { id } = await params;
-
-    const target = await prisma.user.findUnique({ where: { id } });
-    if (!target || target.deletedAt) {
-      return errorResponse(404, "That user no longer exists.", { code: "not_found" });
-    }
-
-    if (await isSoleActiveAdmin(id)) {
-      return errorResponse(422, "This is the only active admin and cannot be removed.", {
-        code: "last_admin",
-      });
-    }
-
-    await prisma.$transaction([
-      prisma.user.update({ where: { id }, data: { deletedAt: new Date(), status: "DISABLED" } }),
-      prisma.session.deleteMany({ where: { userId: id } }),
-      prisma.refreshToken.updateMany({ where: { userId: id, revokedAt: null }, data: { revokedAt: new Date() } }),
-    ]);
-
-    const { ipAddress, userAgent } = requestMeta(request);
-    await writeAudit({
-      actorId: session.user.id,
-      action: "user.removed",
-      entity: "User",
-      entityId: id,
-      ipAddress,
-      userAgent,
-    });
-
-    return NextResponse.json({ message: "User removed." });
-  },
+/**
+ * Team members are never removed from the app: the roster mirrors the GHL
+ * sub-account, and removing someone would orphan their leads, estimates and
+ * commission history. Suspend them instead (POST /api/users/:id/suspend).
+ */
+export const DELETE = apiRoute(async () =>
+  errorResponse(405, "Team members can't be removed. Suspend them instead.", {
+    code: "remove_disabled",
+  }),
 );

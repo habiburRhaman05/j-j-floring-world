@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { SignSheet } from "@/components/estimator/sign-sheet";
+import { EstimateDetail } from "@/components/estimator/estimate-detail";
 import { AdminLeadDialog } from "@/components/leads/admin-lead-dialog";
 import { LeadBoard } from "@/components/pipeline/lead-board";
 import { Button } from "@/components/ui/button";
@@ -72,7 +72,7 @@ export function AdminPipeline({ db, onNewEstimate }: AdminPipelineProps) {
       ) : null}
 
       {signSheetId ? (
-        <SignSheet open db={db} estimateId={signSheetId} onOpenChange={() => setSignSheetId(null)} />
+        <EstimateDetail open db={db} estimateId={signSheetId} onOpenChange={() => setSignSheetId(null)} />
       ) : null}
     </>
   );

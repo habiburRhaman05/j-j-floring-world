@@ -11,7 +11,7 @@ import { Modal } from "@/components/ui/modal";
 import { Panel, PanelBody, PanelHead } from "@/components/ui/panel";
 import { Pill } from "@/components/ui/pill";
 import { Skeleton } from "@/components/ui/skeleton";
-import { apiDelete, apiGet, apiPatch, apiPost } from "@/lib/api/client";
+import { apiGet, apiPatch, apiPost } from "@/lib/api/client";
 import { endpoints } from "@/lib/api/endpoints";
 import { toApiError, type ApiError } from "@/lib/api/errors";
 import { formErrors } from "@/lib/api/form-errors";
@@ -101,7 +101,6 @@ export function AdminTeam() {
   const [resendingId, setResendingId] = useState<string | null>(null);
   const [editUser, setEditUser] = useState<TeamUser | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [removeUser, setRemoveUser] = useState<TeamUser | null>(null);
 
   async function resend(invite: PendingInvitation) {
     setResendingId(invite.id);
@@ -125,20 +124,6 @@ export function AdminTeam() {
     try {
       await apiPost(suspended ? endpoints.users.reactivate(user.id) : endpoints.users.suspend(user.id));
       toast(suspended ? `${user.firstName} reactivated.` : `${user.firstName} suspended.`, "ok");
-      invalidate();
-    } catch (thrown) {
-      toast(toApiError(thrown).displayMessage, "warn");
-    } finally {
-      setBusyId(null);
-    }
-  }
-
-  async function doRemove(user: TeamUser) {
-    setBusyId(user.id);
-    try {
-      await apiDelete(endpoints.users.detail(user.id));
-      toast("User removed.", "ok");
-      setRemoveUser(null);
       invalidate();
     } catch (thrown) {
       toast(toApiError(thrown).displayMessage, "warn");
@@ -214,9 +199,6 @@ export function AdminTeam() {
             </Button>
             <Button size="sm" variant="ghost" disabled={busy} onClick={() => toggleStatus(user)}>
               {user.status === "SUSPENDED" ? "Reactivate" : "Suspend"}
-            </Button>
-            <Button size="sm" variant="danger" disabled={busy} onClick={() => setRemoveUser(user)}>
-              Remove
             </Button>
           </div>
         );
@@ -317,30 +299,6 @@ export function AdminTeam() {
         />
       ) : null}
 
-      {removeUser ? (
-        <Modal
-          open
-          onOpenChange={() => setRemoveUser(null)}
-          title={`Remove ${removeUser.firstName} ${removeUser.lastName}`}
-          actions={[
-            { label: "Cancel", variant: "ghost" },
-            {
-              label: "Remove",
-              variant: "danger",
-              keep: true,
-              onClick: async (close) => {
-                await doRemove(removeUser);
-                close();
-              },
-            },
-          ]}
-        >
-          <p className="t-sub">
-            They will no longer be able to sign in. Existing records they created (leads,
-            estimates, jobs) keep their reference.
-          </p>
-        </Modal>
-      ) : null}
     </>
   );
 }

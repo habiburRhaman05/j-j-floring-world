@@ -1,10 +1,10 @@
 "use client";
 
+import { EstimateStatusPill } from "@/components/estimator/estimate-status";
 import { useState } from "react";
 import { useToast } from "@/components/providers/toast-provider";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
-import { StagePill } from "@/components/ui/pill";
 import { StageSelect } from "@/components/pipeline/stage-select";
 import { useSetLeadStage } from "@/lib/data/hooks";
 import { estimatesForLead } from "@/lib/data/selectors";
@@ -80,7 +80,7 @@ export function AdminLeadDialog({ lead, db, onClose, onOpenEstimate }: AdminLead
               <div className="t-meta">{dt(estimate.createdAt)}</div>
             </div>
             <div className="row">
-              <StagePill stage={estimate.status} />
+              <EstimateStatusPill status={estimate.status} />
               <Button size="sm" onClick={() => onOpenEstimate(estimate.id)}>
                 View
               </Button>

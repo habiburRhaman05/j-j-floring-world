@@ -1,21 +1,16 @@
 "use client";
 
 import { ViewSection } from "@/components/layout/view-section";
-import { useCurrentUser } from "@/components/providers/session-provider";
-import { RepPipeline } from "@/components/sales-rep/pipeline-view";
-import { useAppDb } from "@/lib/data/hooks";
+import { SalesDashboard } from "@/components/sales/sales-dashboard";
 
 export default function SalesRepPipelinePage() {
-  const db = useAppDb();
-  const me = useCurrentUser();
-
   return (
     <ViewSection
       viewKey="pipeline"
       heading="My pipeline"
-      sub="Only the leads assigned to you. Open a card to work it."
+      sub="Live from GoHighLevel: the leads, contacts and deals assigned to you, and how you're doing."
     >
-      <RepPipeline db={db} meId={me?.id ?? ""} />
+      <SalesDashboard scope="own" />
     </ViewSection>
   );
 }

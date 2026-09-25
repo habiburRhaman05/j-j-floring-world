@@ -113,6 +113,9 @@ export interface EstimateLine {
   taxable: boolean;
   /** True for a fee, credit, discount line, or anything not drawn from the price book. */
   isCustom: boolean;
+  /** The GoHighLevel product and price this line was added from. */
+  ghlProductId?: string | null;
+  ghlPriceId?: string | null;
 }
 
 /** Discount applied to one whole package, on top of its line items. */
@@ -162,6 +165,10 @@ export interface Estimate {
   internalNotes: string | null;
   /** Sales tax in percent (7.25 = 7.25%), applied to taxable lines after discount. */
   taxRate: number;
+  /** The package the GHL document was sent for (what the customer is asked to sign). */
+  sentTier?: Tier | null;
+  /** The customer the estimate is for, as held on the lead. */
+  customer?: { name: string; email: string; phone: string } | null;
 }
 
 export interface JobPhoto {

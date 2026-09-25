@@ -19,7 +19,7 @@ import { getRepository, type WorkspaceRepository } from "../api/repository";
 import { toApiError } from "../api/errors";
 import { emptyDatabase } from "./database";
 import { useToast } from "@/components/providers/toast-provider";
-import type { Database } from "../types";
+import type { Database, Tier } from "../types";
 
 export const appDbKey = ["workspace"] as const;
 
@@ -181,7 +181,7 @@ export function useSaveEstimate() {
   );
 }
 export function useSendEstimate() {
-  return useRepositoryMutation((repo, estimateId: string) => repo.sendEstimate(estimateId));
+  return useRepositoryMutation((repo, estimateId: string, tier: Tier) => repo.sendEstimate(estimateId, tier));
 }
 export function useMarkEstimateViewed() {
   return useRepositoryMutation((repo, estimateId: string) => repo.markEstimateViewed(estimateId));

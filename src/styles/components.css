@@ -304,6 +304,8 @@ table.grid th .th-sort .th-caret { font-size: 9px; line-height: 1; opacity: .9; 
 /* --- Modal -------------------------------------------------------------- */
 /* The estimate builder needs the extra width to break into two columns. */
 .modal.wide { max-width: 900px; }
+/* The estimate builder: two working columns plus a package editor. */
+.modal.wide.xwide { max-width: min(1320px, 96vw); }
 .scrim {
   position: fixed; inset: 0; z-index: 90;
   background: rgba(2,14,32,.5);
@@ -450,3 +452,30 @@ table.grid th .th-sort .th-caret { font-size: 9px; line-height: 1; opacity: .9; 
 .col-drop-target .col-body { background: color-mix(in srgb, var(--blue) 8%, transparent); border-radius: 8px; outline: 2px dashed var(--blue); outline-offset: 2px; }
 .tile.dragging { opacity: .5; }
 .tile[draggable="true"] { cursor: grab; }
+
+/* --- Sales dashboards ---------------------------------------------------- */
+.sales-filters {
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px;
+  margin-bottom: 16px;
+}
+.sales-filters > .field { margin-bottom: 0; flex: 0 1 190px; }
+.sales-filters > .field.grow { flex: 1 1 220px; }
+.sales-filters-end { margin-left: auto; }
+table.grid tr.row-click { cursor: pointer; }
+table.grid tr.row-selected { cursor: pointer; background: var(--blue-tint); }
+table.grid tr.row-total td { font-weight: 700; border-top: 2px solid var(--rule-strong); }
+
+/* --- Send estimate dialog ------------------------------------------------ */
+.send-tiers { display: flex; flex-direction: column; gap: 8px; margin: 8px 0 14px; }
+.send-tier {
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px; cursor: pointer;
+  border: 1px solid var(--rule); border-radius: var(--r-md); background: var(--panel);
+}
+.send-tier:hover { background: var(--panel-sunk); }
+.send-tier.active { border-color: var(--blue); box-shadow: 0 0 0 1px var(--blue); background: var(--blue-tint); }
+.send-tier.disabled { opacity: .5; cursor: not-allowed; }
+.send-tier input { accent-color: var(--blue); }
+.send-note {
+  padding: 10px 12px; border-radius: var(--r-md); font-size: 13.5px;
+  background: var(--panel-sunk); border: 1px solid var(--rule);
+}

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { EstimateBuilder } from "@/components/estimator/estimate-builder";
-import { SignSheet } from "@/components/estimator/sign-sheet";
+import { EstimateDetail } from "@/components/estimator/estimate-detail";
 import { RepLeadDialog } from "@/components/leads/rep-lead-dialog";
 import { LeadBoard } from "@/components/pipeline/lead-board";
 import { Stat, StatStrip } from "@/components/ui/stat";
@@ -73,7 +73,7 @@ export function RepPipeline({ db, meId }: { db: Database; meId: string }) {
       ) : null}
 
       {signSheetId ? (
-        <SignSheet open db={db} estimateId={signSheetId} onOpenChange={() => setSignSheetId(null)} />
+        <EstimateDetail open db={db} estimateId={signSheetId} onOpenChange={() => setSignSheetId(null)} />
       ) : null}
     </>
   );

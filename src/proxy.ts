@@ -42,9 +42,14 @@ export function proxy(request: NextRequest) {
     (AUTO_LOGIN_PREFIXES as readonly string[]).includes(parts[0]!) &&
     isGhlId(parts[1]!)
   ) {
-    return NextResponse.rewrite(
-      new URL(`/api/auth/ghl/${parts[0]}/${parts[1]}${search}`, request.url),
-    );
+    // A page with a spinner first, which then calls the auto-login handler,
+    // so the person sees "Signing you in" rather than a blank frame.
+    const signIn = new URL("/auth/ghl", request.url);
+    signIn.searchParams.set("role", parts[0]!);
+    signIn.searchParams.set("id", parts[1]!);
+    const key = request.nextUrl.searchParams.get("key");
+    if (key) signIn.searchParams.set("key", key);
+    return NextResponse.rewrite(signIn);
   }
 
   const isProtected = PROTECTED_PREFIXES.some(

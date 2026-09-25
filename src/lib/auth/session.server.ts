@@ -69,15 +69,15 @@ export function homeForRoles(roles: Role[]): string {
 /* ---------------------------------------------------------------- cookies */
 
 /**
- * Inside a GHL custom-menu iframe the app is a third-party context, which
- * browsers only send cookies to when they are SameSite=None + Secure (and
- * Partitioned, for Chrome's third-party-cookie phase-out). Plain HTTP on
- * localhost cannot use Secure cookies, so development falls back to Lax.
+ * Inside a GHL custom-menu iframe the app is a third-party context, and
+ * browsers only keep cookies there when they are SameSite=None + Secure (plus
+ * Partitioned, for Chrome's third-party-cookie rules). That applies in
+ * development too, or auto-login works on the server and then lands on the
+ * login form because the iframe dropped the cookie. Browsers treat
+ * http://localhost as a secure origin, so Secure cookies still work locally;
+ * a dev server reached by LAN IP over plain http would need HTTPS.
  */
-const COOKIE_SECURITY =
-  process.env.NODE_ENV === "production"
-    ? ({ secure: true, sameSite: "none", partitioned: true } as const)
-    : ({ secure: false, sameSite: "lax" } as const);
+const COOKIE_SECURITY = { secure: true, sameSite: "none", partitioned: true } as const;
 
 /** Anything with a Next `cookies`-style setter: `await cookies()` or `response.cookies`. */
 interface CookieWriter {

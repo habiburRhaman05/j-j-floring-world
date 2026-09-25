@@ -5,6 +5,7 @@
    ========================================================================== */
 
 import { round2 } from "../format";
+import type { PriceBookItem } from "../pricebook/types";
 import type {
   EstimateLine,
   EstimateLineRow,
@@ -14,6 +15,7 @@ import type {
   PricedLine,
   Product,
   Totals,
+  Unit,
 } from "../types";
 
 export { round2 };
@@ -195,6 +197,26 @@ export function toInvoiceLines(lines: readonly EstimateLine[] | undefined): Line
     out.push({ productId: line.productId, qty: line.qty });
   }
   return out;
+}
+
+/** A line snapshotted from a GoHighLevel price-book item. */
+export function lineFromPriceBook(item: PriceBookItem, id: string, qty = 1, unit: Unit = item.unit): EstimateLine {
+  return {
+    id,
+    productId: null,
+    ghlProductId: item.productId,
+    ghlPriceId: item.priceId,
+    name: item.priceLabel ? `${item.name} - ${item.priceLabel}` : item.name,
+    description: item.description,
+    category: null,
+    unit,
+    qty,
+    unitPrice: item.unitPrice,
+    // GHL holds no cost. A rep's save stores 0; an admin can type one on the line.
+    unitCost: 0,
+    taxable: true,
+    isCustom: false,
+  };
 }
 
 /** A blank custom line (a fee, a discount line, anything typed by hand). */
