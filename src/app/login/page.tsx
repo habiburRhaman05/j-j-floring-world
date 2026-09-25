@@ -21,6 +21,8 @@ const AUTO_LOGIN_ERRORS: Record<string, string> = {
   ghl_not_connected: "The app is not connected to GoHighLevel yet. An admin needs to finish setup.",
   ghl_unreachable: "GoHighLevel could not be reached to confirm who you are. Try again, or sign in below.",
   ghl_user_invalid: "GoHighLevel does not recognise that user for this business.",
+  ghl_location_mismatch: "That admin link is for a different GoHighLevel location than this app is connected to.",
+  ghl_no_admin: "This app has no active Admin to sign in. Sign in below, or contact support.",
   ghl_user_not_in_app: "Your GoHighLevel user has not been given access to this app. Ask an admin.",
   ghl_wrong_role: "Your account has a different role in this app, so that link cannot open this dashboard. Sign in below.",
   account_inactive: "Your account is not active. Contact an administrator.",

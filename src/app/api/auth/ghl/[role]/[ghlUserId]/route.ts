@@ -3,28 +3,40 @@ import { timingSafeEqual } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { apiRoute } from "@/lib/api/api-route";
 import { requestMeta, writeAudit } from "@/lib/auth/audit";
+import type { SessionScope } from "@/lib/auth/cookie-names";
 import { issueSession, setAuthCookies } from "@/lib/auth/session.server";
 import { getGhlConnection, getGhlUser, isLocationUser } from "@/lib/ghl/client";
 
 /* ==========================================================================
-   GHL auto-login  -  /csr/{{user.id}}  and  /sales-rep/{{user.id}}
+   GHL auto-login  -  custom menu links
    --------------------------------------------------------------------------
-   proxy.ts rewrites those two custom-menu-link shapes to this handler. The
-   checks, in order:
+     /csr/{{user.id}}?key=...        CSR dashboard
+     /sales-rep/{{user.id}}?key=...  Sales Rep dashboard
+     /admin/{{location.id}}          Admin dashboard
+
+   proxy.ts rewrites those shapes to this handler (via the /auth/ghl spinner
+   page). Each signs in to its own dashboard's session (cookie-names.ts), so
+   the same browser can hold an Admin, a CSR and a Sales Rep session at once.
+
+   CSR / Sales Rep, in order:
      1. the link's key matches GHL_AUTOLOGIN_KEY (when that is set)
-     2. GHL knows the user, it is not deleted, and it belongs to this sub-account
+     2. GHL knows the user, it is not deleted, and it belongs to this location
      3. our database has an ACTIVE user with that ghlUserId
      4. that user's app role matches the dashboard the link points at
-   Then it signs in through the same issueSession() as the password login and
-   redirects to the dashboard. Any failure lands on /login with a reason.
 
-   A GHL user id is not a secret, which is why step 1 exists: without a key,
-   anyone who learns an id could open the link.
+   Admin, as the business owner chose: the location id must be the one saved
+   at setup, and then the Admin is signed in - the account owner recorded at
+   setup, else the longest-standing active Admin. There is no key and no
+   per-person check on this link, so anyone who has the location id (every
+   GHL user of the sub-account can see it) can open the Admin dashboard with
+   it. Keep the link in an admins-only GHL menu.
+
+   Any failure lands on /login with a reason; email/password stays available.
    ========================================================================== */
 
-const LINK_ROLES: Record<string, { roleKey: "csr" | "sales_rep"; home: string }> = {
-  csr: { roleKey: "csr", home: "/csr" },
-  "sales-rep": { roleKey: "sales_rep", home: "/sales-rep" },
+const LINK_ROLES: Record<string, { roleKey: "csr" | "sales_rep"; scope: SessionScope; home: string }> = {
+  csr: { roleKey: "csr", scope: "csr", home: "/csr" },
+  "sales-rep": { roleKey: "sales_rep", scope: "sales_rep", home: "/sales-rep" },
 };
 
 function sameSecret(given: string | null, expected: string): boolean {
@@ -36,14 +48,14 @@ function sameSecret(given: string | null, expected: string): boolean {
 
 export const GET = apiRoute(
   async (request: NextRequest, { params }: { params: Promise<{ role: string; ghlUserId: string }> }) => {
-    const { role, ghlUserId } = await params;
+    const { role, ghlUserId: linkId } = await params;
     const meta = requestMeta(request);
 
     const fail = async (reason: string, detail?: Record<string, unknown>) => {
       await writeAudit({
         action: "auth.ghl_login.failed",
         entity: "User",
-        entityId: ghlUserId,
+        entityId: linkId,
         after: { reason, role, ...detail },
         ...meta,
       }).catch(() => {});
@@ -52,10 +64,47 @@ export const GET = apiRoute(
       return NextResponse.redirect(login);
     };
 
+    const signIn = async (userId: string, scope: SessionScope, home: string) => {
+      const issued = await issueSession(userId, meta, "ghl");
+      await prisma.user.update({ where: { id: userId }, data: { lastLoginAt: new Date() } });
+      await writeAudit({
+        actorId: userId,
+        action: "auth.ghl_login.succeeded",
+        entity: "User",
+        entityId: userId,
+        after: { role: scope },
+        ...meta,
+      });
+      const response = NextResponse.redirect(new URL(home, request.url));
+      setAuthCookies(response.cookies, issued, scope);
+      return response;
+    };
+
+    // An unrendered merge field ("{{user.id}}") or anything that is not a GHL id.
+    if (!/^[A-Za-z0-9]{10,64}$/.test(linkId)) return fail("ghl_link_invalid");
+
+    /* ---------------------------------------------------------- admin */
+    if (role === "admin") {
+      const credential = await prisma.integrationCredential.findUnique({
+        where: { provider: "gohighlevel" },
+        select: { locationId: true, setupCompletedAt: true, connectedById: true },
+      });
+      if (!credential?.locationId || !credential.setupCompletedAt) return fail("ghl_not_connected");
+      if (credential.locationId !== linkId) return fail("ghl_location_mismatch");
+
+      const admins = await prisma.user.findMany({
+        where: { status: "ACTIVE", deletedAt: null, roles: { some: { role: { key: "admin" } } } },
+        orderBy: { createdAt: "asc" },
+        select: { id: true },
+      });
+      const admin = admins.find((a) => a.id === credential.connectedById) ?? admins[0];
+      if (!admin) return fail("ghl_no_admin");
+      return signIn(admin.id, "admin", "/admin");
+    }
+
+    /* ------------------------------------------------ CSR / Sales Rep */
     const target = LINK_ROLES[role];
     if (!target) return fail("ghl_link_invalid");
-    // An unrendered merge field ("{{user.id}}") or anything that is not a GHL id.
-    if (!/^[A-Za-z0-9]{10,64}$/.test(ghlUserId)) return fail("ghl_link_invalid");
 
     const expectedKey = process.env.GHL_AUTOLOGIN_KEY;
     if (expectedKey && !sameSecret(request.nextUrl.searchParams.get("key"), expectedKey)) {
@@ -67,7 +116,7 @@ export const GET = apiRoute(
 
     let ghlUser;
     try {
-      ghlUser = await getGhlUser(connection, ghlUserId);
+      ghlUser = await getGhlUser(connection, linkId);
     } catch {
       return fail("ghl_unreachable");
     }
@@ -76,7 +125,7 @@ export const GET = apiRoute(
     }
 
     const user = await prisma.user.findUnique({
-      where: { ghlUserId },
+      where: { ghlUserId: linkId },
       include: { roles: { include: { role: true } } },
     });
     if (!user || user.deletedAt) return fail("ghl_user_not_in_app");
@@ -85,19 +134,6 @@ export const GET = apiRoute(
       return fail("ghl_wrong_role", { appRole: user.role });
     }
 
-    const issued = await issueSession(user.id, meta, "ghl");
-    await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
-    await writeAudit({
-      actorId: user.id,
-      action: "auth.ghl_login.succeeded",
-      entity: "User",
-      entityId: user.id,
-      after: { role: target.roleKey },
-      ...meta,
-    });
-
-    const response = NextResponse.redirect(new URL(target.home, request.url));
-    setAuthCookies(response.cookies, issued);
-    return response;
+    return signIn(user.id, target.scope, target.home);
   },
 );

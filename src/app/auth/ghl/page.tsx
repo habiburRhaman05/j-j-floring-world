@@ -3,11 +3,11 @@
 import { useEffect } from "react";
 
 /** Dashboards that accept a GHL auto-login link, by first path segment. */
-const LINK_ROLES = new Set(["csr", "sales-rep"]);
+const LINK_ROLES = new Set(["admin", "csr", "sales-rep"]);
 
 /**
  * Shown while a GHL custom-menu link signs someone in. proxy.ts rewrites
- * /csr/{{user.id}} and /sales-rep/{{user.id}} here; this page immediately
+ * /csr/{{user.id}}, /sales-rep/{{user.id}} and /admin/{{location.id}} here; this page immediately
  * hands off to the auto-login handler, which checks the user with GHL and our
  * database, sets the session cookies and redirects to the dashboard (or to
  * /login with the reason when a check fails).

@@ -32,7 +32,6 @@ export const ADMIN_NAV: NavEntry[] = [
   { key: "jobs", href: "/admin/jobs", label: "Jobs & Invoices" },
   { key: "products", href: "/admin/products", label: "Products" },
   { key: "team", href: "/admin/team", label: "Team" },
-  { key: "sync", href: "/admin/sync", label: "Sync & Settings" },
 ];
 
 export const SALES_REP_NAV: NavEntry[] = [

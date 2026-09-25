@@ -1,6 +1,12 @@
 import axios, { type AxiosInstance, type AxiosRequestConfig, type InternalAxiosRequestConfig } from "axios";
 import { API_BASE_URL, API_TIMEOUT_MS } from "./config";
 import { ApiError, toApiError } from "./errors";
+import { SCOPE_HEADER, scopeForPath } from "../auth/cookie-names";
+
+/** Which dashboard's session a request uses: the one for the page it is made from. */
+function currentScope(): string | null {
+  return typeof window === "undefined" ? null : scopeForPath(window.location.pathname);
+}
 
 /* ==========================================================================
    client.ts  -  the single axios instance
@@ -44,6 +50,8 @@ export function createApiClient(): AxiosInstance {
   });
 
   instance.interceptors.request.use((config) => {
+    const scope = currentScope();
+    if (scope) config.headers.set(SCOPE_HEADER, scope);
     if (authToken) {
       config.headers.set("Authorization", `Bearer ${authToken}`);
     }
@@ -94,6 +102,7 @@ function refreshSession(): Promise<boolean> {
       baseURL: API_BASE_URL || undefined,
       timeout: API_TIMEOUT_MS,
       withCredentials: true,
+      headers: currentScope() ? { [SCOPE_HEADER]: currentScope()! } : undefined,
     })
     .then(() => true)
     .catch(() => false)

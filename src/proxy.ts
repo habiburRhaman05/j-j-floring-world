@@ -1,29 +1,39 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { REFRESH_COOKIE, SESSION_COOKIE } from "@/lib/auth/cookie-names";
+import { SCOPE_HEADER, refreshCookieName, scopeForPath, sessionCookieName } from "@/lib/auth/cookie-names";
 
 /* ==========================================================================
    proxy.ts  -  GHL auto-login links, session refresh, signed-out redirect
    --------------------------------------------------------------------------
    Renamed from `middleware.ts` in Next.js 16. Deliberately cookie-presence
    only - the real, database-backed check runs in each protected layout via
-   `requireUser()`. Three jobs:
+   `requireUser()`. Four jobs:
 
-   1. /csr/{{user.id}} and /sales-rep/{{user.id}} (GHL custom menu links) are
-      rewritten to the auto-login handler. A GHL id is 20-ish letters and
-      digits with at least one capital or digit, so it can never collide with
-      a real page segment like /csr/appointments.
-   2. A protected page with no access cookie but a refresh cookie goes through
-      /api/auth/refresh first, which rotates the pair and comes straight back.
-   3. No cookies at all: off to /login.
+   1. /csr/{{user.id}}, /sales-rep/{{user.id}} and /admin/{{location.id}}
+      (GHL custom menu links) are rewritten to the auto-login handler. A GHL
+      id is 20-ish letters and digits with at least one capital or digit, so
+      it can never collide with a real page segment like /csr/appointments.
+   2. Each dashboard has its own session (cookie-names.ts). The page's
+      dashboard is passed on as the x-jjf-scope header for requireUser().
+   3. That dashboard's access cookie missing but its refresh cookie present:
+      through /api/auth/refresh first, which rotates the pair and comes back.
+   4. No cookies for that dashboard: off to /login.
    ========================================================================== */
 
-const PROTECTED_PREFIXES = ["/admin", "/sales-rep", "/csr", "/installer", "/account"];
-
 /** Dashboards that accept a GHL auto-login link, keyed by URL prefix. */
-const AUTO_LOGIN_PREFIXES = ["csr", "sales-rep"] as const;
+const AUTO_LOGIN_PREFIXES = ["admin", "csr", "sales-rep"] as const;
 
 /** Real page segments under those prefixes, excluded explicitly as a second guard. */
-const RESERVED_SEGMENTS = new Set(["appointments", "calendar", "commission", "estimates", "jobs", "pipeline"]);
+const RESERVED_SEGMENTS = new Set([
+  "appointments",
+  "calendar",
+  "commission",
+  "estimates",
+  "jobs",
+  "pipeline",
+  "products",
+  "team",
+  "sync",
+]);
 
 function isGhlId(segment: string): boolean {
   return (
@@ -52,15 +62,20 @@ export function proxy(request: NextRequest) {
     return NextResponse.rewrite(signIn);
   }
 
-  const isProtected = PROTECTED_PREFIXES.some(
-    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
-  );
-  if (!isProtected) return NextResponse.next();
+  // Each dashboard has its own session (cookie-names.ts); this page belongs to one.
+  const scope = scopeForPath(pathname);
+  if (!scope) return NextResponse.next();
 
-  if (request.cookies.has(SESSION_COOKIE)) return NextResponse.next();
+  if (request.cookies.has(sessionCookieName(scope))) {
+    // Tell the layout (requireUser) which dashboard's cookies to read.
+    const forwarded = new Headers(request.headers);
+    forwarded.set(SCOPE_HEADER, scope);
+    return NextResponse.next({ request: { headers: forwarded } });
+  }
 
-  if (request.cookies.has(REFRESH_COOKIE)) {
+  if (request.cookies.has(refreshCookieName(scope))) {
     const refresh = new URL("/api/auth/refresh", request.url);
+    refresh.searchParams.set("scope", scope);
     refresh.searchParams.set("next", `${pathname}${search}`);
     return NextResponse.redirect(refresh);
   }
@@ -71,5 +86,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/sales-rep/:path*", "/csr/:path*", "/installer/:path*", "/account/:path*"],
+  matcher: ["/admin/:path*", "/sales-rep/:path*", "/csr/:path*", "/installer/:path*"],
 };

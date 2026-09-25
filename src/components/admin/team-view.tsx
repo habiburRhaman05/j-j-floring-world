@@ -8,7 +8,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { Input, Select } from "@/components/ui/input";
 import { Field } from "@/components/ui/label";
 import { Modal } from "@/components/ui/modal";
-import { Panel, PanelBody, PanelHead } from "@/components/ui/panel";
+import { Panel, PanelBody } from "@/components/ui/panel";
 import { Pill } from "@/components/ui/pill";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiGet, apiPatch, apiPost } from "@/lib/api/client";
@@ -20,8 +20,9 @@ import { relative } from "@/lib/format";
 /* ==========================================================================
    team-view.tsx  -  real, database-backed team roster
    --------------------------------------------------------------------------
-   Talks to /api/users (list, invite, edit, suspend/reactivate, remove), not
-   the mock dataset. One role per user for now, matching the invite flow;
+   Talks to /api/users (list, edit, suspend/reactivate), not the mock
+   dataset. Team members come from GoHighLevel through first-run setup, so
+   there is no invite or remove here. One role per user;
    the full multi-role permission vault (doc 04) is a later pass once fields
    that actually need it are built.
 
@@ -92,31 +93,11 @@ export function AdminTeam() {
   });
 
   const users = data?.users ?? [];
-  const invitations = data?.invitations ?? [];
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: TEAM_QUERY_KEY });
 
-  const [inviteOpen, setInviteOpen] = useState(false);
-  const [linkModal, setLinkModal] = useState<{ email: string; link: string } | null>(null);
-  const [resendingId, setResendingId] = useState<string | null>(null);
   const [editUser, setEditUser] = useState<TeamUser | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
-
-  async function resend(invite: PendingInvitation) {
-    setResendingId(invite.id);
-    try {
-      const result = await apiPost<{ inviteLink: string }>(endpoints.users.create, {
-        email: invite.email,
-        roleKey: invite.roleKey,
-      });
-      setLinkModal({ email: invite.email, link: result.inviteLink });
-      invalidate();
-    } catch (thrown) {
-      toast(toApiError(thrown).displayMessage, "warn");
-    } finally {
-      setResendingId(null);
-    }
-  }
 
   async function toggleStatus(user: TeamUser) {
     setBusyId(user.id);
@@ -213,9 +194,6 @@ export function AdminTeam() {
           Every account signs in with its email. The role decides what that login can open.
           {isFetching && !isLoading ? <span className="t-meta"> · refreshing…</span> : null}
         </div>
-        <Button size="sm" variant="primary" onClick={() => setInviteOpen(true)}>
-          Invite user
-        </Button>
       </div>
 
       <Panel>
@@ -235,58 +213,8 @@ export function AdminTeam() {
         )}
       </Panel>
 
-      {invitations.length > 0 ? (
-        <Panel style={{ marginTop: 16 }}>
-          <PanelHead>Pending invitations</PanelHead>
-          <PanelBody tight>
-            <p className="t-meta" style={{ marginBottom: 8 }}>
-              Email delivery isn&apos;t wired up yet - use &quot;Get link&quot; to copy the
-              sign-up link and send it yourself.
-            </p>
-            {invitations.map((invite) => (
-              <div key={invite.id} className="spread" style={{ padding: "8px 0" }}>
-                <div>
-                  <div style={{ fontWeight: 600 }}>{invite.email}</div>
-                  <div className="t-meta">Invited as {invite.roleName}</div>
-                </div>
-                <div className="row" style={{ gap: 8, alignItems: "center" }}>
-                  <Pill className="pill-outline">
-                    Expires {new Date(invite.expiresAt).toLocaleDateString()}
-                  </Pill>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled={resendingId === invite.id}
-                    onClick={() => resend(invite)}
-                  >
-                    {resendingId === invite.id ? "Generating…" : "Get link"}
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </PanelBody>
-        </Panel>
-      ) : null}
 
-      {inviteOpen ? (
-        <InviteDialog
-          onClose={() => setInviteOpen(false)}
-          onInvited={(email, link) => {
-            setInviteOpen(false);
-            toast(`Invitation created for ${email}.`, "ok");
-            setLinkModal({ email, link });
-            invalidate();
-          }}
-        />
-      ) : null}
 
-      {linkModal ? (
-        <InviteLinkModal
-          email={linkModal.email}
-          link={linkModal.link}
-          onClose={() => setLinkModal(null)}
-        />
-      ) : null}
 
       {editUser ? (
         <EditUserDialog
@@ -344,114 +272,6 @@ function TeamTableSkeleton() {
         </tbody>
       </table>
     </div>
-  );
-}
-
-function InviteDialog({
-  onClose,
-  onInvited,
-}: {
-  onClose: () => void;
-  onInvited: (email: string, link: string) => void;
-}) {
-  const [email, setEmail] = useState("");
-  const [roleKey, setRoleKey] = useState(ROLE_OPTIONS[1]!.key);
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<ApiError | null>(null);
-  const { fieldError, generalError } = formErrors(error);
-
-  async function onSubmit(event: FormEvent) {
-    event.preventDefault();
-    setPending(true);
-    setError(null);
-    try {
-      const result = await apiPost<{ inviteLink: string }>(endpoints.users.create, {
-        email,
-        roleKey,
-      });
-      onInvited(email, result.inviteLink);
-    } catch (thrown) {
-      setError(toApiError(thrown));
-    } finally {
-      setPending(false);
-    }
-  }
-
-  return (
-    <Modal open onOpenChange={onClose} title="Invite a team member">
-      <form onSubmit={onSubmit} noValidate>
-        {generalError ? (
-          <div className="login-alert" role="alert" style={{ marginBottom: 12 }}>
-            {generalError}
-          </div>
-        ) : null}
-        <Field label="Email">
-          <Input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            autoFocus
-            required
-            aria-invalid={fieldError("email") ? true : undefined}
-          />
-          {fieldError("email") ? <span className="field-err">{fieldError("email")}</span> : null}
-        </Field>
-        <Field label="Role">
-          <Select value={roleKey} onChange={(e) => setRoleKey(e.target.value)}>
-            {ROLE_OPTIONS.map((role) => (
-              <option key={role.key} value={role.key}>
-                {role.name}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Button type="submit" variant="primary" disabled={pending} style={{ marginTop: 12 }}>
-          {pending ? "Creating…" : "Create invitation"}
-        </Button>
-      </form>
-    </Modal>
-  );
-}
-
-function InviteLinkModal({
-  email,
-  link,
-  onClose,
-}: {
-  email: string;
-  link: string;
-  onClose: () => void;
-}) {
-  const { toast } = useToast();
-  const [copied, setCopied] = useState(false);
-
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(link);
-      setCopied(true);
-      toast("Link copied.", "ok");
-    } catch {
-      toast("Could not copy automatically - select and copy the link manually.", "warn");
-    }
-  }
-
-  return (
-    <Modal open onOpenChange={onClose} title="Invitation link" actions={[{ label: "Done", variant: "primary" }]}>
-      <p className="t-sub">
-        Send this link to <strong>{email}</strong> however you like (email, text, chat).
-        It expires in 7 days and can only be used once.
-      </p>
-      <Panel style={{ marginTop: 12 }}>
-        <PanelBody tight>
-          <div className="row" style={{ gap: 8, alignItems: "center" }}>
-            <Input readOnly value={link} onFocus={(e) => e.target.select()} style={{ flex: 1 }} />
-            <Button size="sm" variant={copied ? "ghost" : "primary"} onClick={copy}>
-              {copied ? "Copied" : "Copy"}
-            </Button>
-          </div>
-        </PanelBody>
-      </Panel>
-    </Modal>
   );
 }
 

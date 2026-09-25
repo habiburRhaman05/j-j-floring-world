@@ -3,7 +3,7 @@ import { z } from "zod";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { verifyPassword } from "@/lib/auth/password";
-import { issueSession, setAuthCookies } from "@/lib/auth/session.server";
+import { issueSession, scopeForRoles, setAuthCookies } from "@/lib/auth/session.server";
 import { serializeSessionUser } from "@/lib/auth/serialize";
 import { writeAudit, requestMeta } from "@/lib/auth/audit";
 import { isLoginLocked } from "@/lib/auth/rate-limit";
@@ -67,8 +67,17 @@ export const POST = apiRoute(async (request: NextRequest) => {
     });
   }
 
+  const roles = user.roles.map((ur) => ur.role);
+  // Signs in to the user's own dashboard; sessions in other dashboards are left alone.
+  const scope = scopeForRoles(roles);
+  if (!scope) {
+    return errorResponse(403, "This account has no dashboard role assigned. Contact an administrator.", {
+      code: "no_role",
+    });
+  }
+
   const issued = await issueSession(user.id, { ipAddress, userAgent }, "password");
-  setAuthCookies(await cookies(), issued);
+  setAuthCookies(await cookies(), issued, scope);
 
   await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
   await writeAudit({
@@ -80,6 +89,5 @@ export const POST = apiRoute(async (request: NextRequest) => {
     userAgent,
   });
 
-  const roles = user.roles.map((ur) => ur.role);
   return NextResponse.json({ user: serializeSessionUser(user, roles) });
 });

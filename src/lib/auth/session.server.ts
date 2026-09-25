@@ -1,6 +1,6 @@
 import "server-only";
 import { randomUUID } from "crypto";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { generateToken, hashToken } from "./tokens";
@@ -9,13 +9,14 @@ import type { Role, User } from "@prisma/client";
 /* ==========================================================================
    session.server.ts  -  access sessions + rotating refresh tokens
    --------------------------------------------------------------------------
-   Two cookies, both httpOnly, both opaque (only their SHA-256 hash is stored):
+   Two cookies per dashboard (see cookie-names.ts for the multi-session
+   scheme), both httpOnly, both opaque (only their SHA-256 hash is stored):
 
-     jjf_session   access token, 30 minutes. Maps to a `Session` row, which is
-                   what every route handler and layout checks. Short-lived so
-                   a suspended user loses access within minutes.
+     jjf_<scope>_session   access token, 30 minutes. Maps to a `Session` row,
+                   which is what every route handler and layout checks.
+                   Short-lived so a suspended user loses access within minutes.
 
-     jjf_refresh   refresh token, 30 days, sliding (90 day hard cap per
+     jjf_<scope>_refresh   refresh token, 30 days, sliding (90 day hard cap per
                    login). Used only to mint a new access + refresh pair, and
                    rotated on every use: the old token is marked used, a
                    successor is issued in the same "family". Presenting a used
@@ -29,9 +30,16 @@ import type { Role, User } from "@prisma/client";
    retry) and /api/auth/session (first paint of the session provider).
    ========================================================================== */
 
-import { REFRESH_COOKIE, SESSION_COOKIE } from "./cookie-names";
+import {
+  SCOPE_HEADER,
+  SESSION_SCOPES,
+  isSessionScope,
+  refreshCookieName,
+  sessionCookieName,
+  type SessionScope,
+} from "./cookie-names";
 
-export { REFRESH_COOKIE, SESSION_COOKIE };
+export { SESSION_SCOPES, type SessionScope };
 
 const ACCESS_TTL_MS = 30 * 60 * 1000;
 /** The DB row outlives the cookie slightly, so clock skew never 401s a live cookie. */
@@ -49,6 +57,8 @@ export interface CurrentSession {
   user: User;
   roles: Role[];
   activeRoleId: string | null;
+  /** Which dashboard's cookies this session came from. */
+  scope: SessionScope;
 }
 
 /** Role keys this build's dashboards are gated on, and where each one lands. */
@@ -58,6 +68,20 @@ export const ROLE_HOME: Record<string, string> = {
   csr: "/csr",
   installer: "/installer",
 };
+
+/** The dashboard a user signs in to: their first role, in ROLE_HOME order. */
+export function scopeForRoles(roles: Role[]): SessionScope | null {
+  for (const scope of SESSION_SCOPES) {
+    if (roles.some((r) => r.key === scope)) return scope;
+  }
+  return null;
+}
+
+/** The scope this request names (x-jjf-scope), or null when it names none. */
+export async function requestScope(): Promise<SessionScope | null> {
+  const value = (await headers()).get(SCOPE_HEADER);
+  return isSessionScope(value) ? value : null;
+}
 
 export function homeForRoles(roles: Role[]): string {
   for (const key of Object.keys(ROLE_HOME)) {
@@ -90,14 +114,14 @@ export interface IssuedSession {
   userId: string;
 }
 
-export function setAuthCookies(target: CookieWriter, issued: IssuedSession): void {
-  target.set(SESSION_COOKIE, issued.accessToken, {
+export function setAuthCookies(target: CookieWriter, issued: IssuedSession, scope: SessionScope): void {
+  target.set(sessionCookieName(scope), issued.accessToken, {
     httpOnly: true,
     path: "/",
     maxAge: Math.floor(ACCESS_TTL_MS / 1000),
     ...COOKIE_SECURITY,
   });
-  target.set(REFRESH_COOKIE, issued.refreshToken, {
+  target.set(refreshCookieName(scope), issued.refreshToken, {
     httpOnly: true,
     path: "/",
     maxAge: Math.floor(REFRESH_TTL_MS / 1000),
@@ -105,8 +129,8 @@ export function setAuthCookies(target: CookieWriter, issued: IssuedSession): voi
   });
 }
 
-export function clearAuthCookies(target: CookieWriter): void {
-  for (const name of [SESSION_COOKIE, REFRESH_COOKIE]) {
+export function clearAuthCookies(target: CookieWriter, scope: SessionScope): void {
+  for (const name of [sessionCookieName(scope), refreshCookieName(scope)]) {
     target.set(name, "", { httpOnly: true, path: "/", maxAge: 0, ...COOKIE_SECURITY });
   }
 }
@@ -257,37 +281,39 @@ export async function rotateRefreshToken(raw: string | undefined, meta: RequestM
 
 /* ----------------------------------------------------------------- reading */
 
+/** Signs out of the current dashboard only; the other dashboards stay signed in. */
 export async function destroyCurrentSession(): Promise<void> {
   const store = await cookies();
-  const rawAccess = store.get(SESSION_COOKIE)?.value;
-  const rawRefresh = store.get(REFRESH_COOKIE)?.value;
+  const scope = await requestScope();
+  const scopes = scope ? [scope] : SESSION_SCOPES;
 
-  let familyId: string | null = null;
-  if (rawAccess) {
-    familyId =
-      (await prisma.session.findUnique({ where: { sessionToken: hashToken(rawAccess) } }))?.familyId ?? null;
-  }
-  if (!familyId && rawRefresh) {
-    familyId =
-      (await prisma.refreshToken.findUnique({ where: { tokenHash: hashToken(rawRefresh) } }))?.familyId ?? null;
-  }
+  for (const sc of scopes) {
+    const rawAccess = store.get(sessionCookieName(sc))?.value;
+    const rawRefresh = store.get(refreshCookieName(sc))?.value;
 
-  if (familyId) {
-    await revokeFamily(familyId).catch(() => {});
-  } else if (rawAccess) {
-    await prisma.session.deleteMany({ where: { sessionToken: hashToken(rawAccess) } }).catch(() => {});
+    let familyId: string | null = null;
+    if (rawAccess) {
+      familyId =
+        (await prisma.session.findUnique({ where: { sessionToken: hashToken(rawAccess) } }))?.familyId ?? null;
+    }
+    if (!familyId && rawRefresh) {
+      familyId =
+        (await prisma.refreshToken.findUnique({ where: { tokenHash: hashToken(rawRefresh) } }))?.familyId ?? null;
+    }
+
+    if (familyId) {
+      await revokeFamily(familyId).catch(() => {});
+    } else if (rawAccess) {
+      await prisma.session.deleteMany({ where: { sessionToken: hashToken(rawAccess) } }).catch(() => {});
+    }
+    if (rawAccess || rawRefresh) clearAuthCookies(store, sc);
   }
-  clearAuthCookies(store);
 }
 
-/**
- * Reads the access cookie and validates it against its Session row. Returns
- * null for anything invalid: no cookie, unknown token, expired, or a user who
- * is no longer ACTIVE. Never refreshes - see the header for where that happens.
- */
-export async function getCurrentSession(): Promise<CurrentSession | null> {
+/** Validates one scope's access cookie against its Session row. */
+async function sessionForScope(scope: SessionScope): Promise<CurrentSession | null> {
   const store = await cookies();
-  const raw = store.get(SESSION_COOKIE)?.value;
+  const raw = store.get(sessionCookieName(scope))?.value;
   if (!raw) return null;
 
   const session = await prisma.session.findUnique({
@@ -307,13 +333,49 @@ export async function getCurrentSession(): Promise<CurrentSession | null> {
     return null;
   }
 
+  const roles = session.user.roles.map((ur) => ur.role);
+  // A cookie only counts for the dashboard its user belongs to.
+  if (!roles.some((r) => r.key === scope)) return null;
+
   return {
     sessionId: session.id,
     familyId: session.familyId,
     user: session.user,
-    roles: session.user.roles.map((ur) => ur.role),
+    roles,
     activeRoleId: session.activeRoleId,
+    scope,
   };
+}
+
+/**
+ * The signed-in session for this request. Inside a dashboard (x-jjf-scope set)
+ * only that dashboard's cookies count; outside one (the login page) the first
+ * valid session wins, Admin first. Returns null for anything invalid: no
+ * cookie, unknown token, expired, or a user who is no longer ACTIVE. Never
+ * refreshes - see the header for where that happens.
+ */
+export async function getCurrentSession(): Promise<CurrentSession | null> {
+  const scope = await requestScope();
+  if (scope) return sessionForScope(scope);
+  for (const sc of SESSION_SCOPES) {
+    const session = await sessionForScope(sc);
+    if (session) return session;
+  }
+  return null;
+}
+
+/** The scope whose refresh cookie this request carries (the named one, or any when none is named). */
+export async function refreshCookieScope(scope: SessionScope | null): Promise<SessionScope | null> {
+  const store = await cookies();
+  for (const sc of scope ? [scope] : SESSION_SCOPES) {
+    if (store.has(refreshCookieName(sc))) return sc;
+  }
+  return null;
+}
+
+/** Reads a scope's refresh cookie from the incoming request. */
+export async function readRefreshCookie(scope: SessionScope): Promise<string | undefined> {
+  return (await cookies()).get(refreshCookieName(scope))?.value;
 }
 
 /**
@@ -328,8 +390,8 @@ export async function requireUser(allowedRoleKeys?: string[]): Promise<CurrentSe
   if (!session) {
     // The proxy normally refreshes before a page renders; this covers an
     // access cookie that expired between the proxy and this layout.
-    const hasRefresh = (await cookies()).has(REFRESH_COOKIE);
-    redirect(hasRefresh ? "/api/auth/refresh" : "/login");
+    const scope = await refreshCookieScope(await requestScope());
+    redirect(scope ? `/api/auth/refresh?scope=${scope}` : "/login");
   }
 
   if (allowedRoleKeys && allowedRoleKeys.length > 0) {
