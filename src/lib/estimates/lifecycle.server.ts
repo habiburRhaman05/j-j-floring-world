@@ -43,19 +43,28 @@ import {
    ========================================================================== */
 
 /**
- * Sends one package to the customer for signature: writes it to the contact's
- * "Estimate - ..." fields, then has GHL email the saved template to the
- * contact. Unlike the opportunity update below, a failed send is a failed
- * request - the estimate stays a Draft rather than claiming it went out.
+ * Sends ALL non-empty packages to the customer for signature: mirrors every
+ * package's figures onto the contact's per-tier "Estimate - Good - ...",
+ * "Estimate - Better - ..." and "Estimate - Best - ..." fields, then has
+ * GHL email the saved template to the contact. The customer picks a
+ * package with the template's radio field, signs, and that IS the approval;
+ * readSelectedTier() in the sync loop records which one they chose.
+ *
+ * A failed send is a failed request - the estimate stays a Draft rather
+ * than claiming it went out.
  */
-export async function sendEstimate(connection: GhlConnection, viewer: Viewer, estimateId: string, tier: Tier) {
+export async function sendEstimate(connection: GhlConnection, viewer: Viewer, estimateId: string) {
   const row = await loadForViewer(viewer, estimateId);
   if (row.status === "SIGNED") throw new EstimateError("This estimate is already approved.", 409, "estimate_signed");
 
-  const level = tierToDb(tier)!;
-  const chosen = row.tiers.find((t) => t.level === level);
-  if (!chosen || chosen.lineItems.length === 0) {
-    throw new EstimateError(`The ${tier} package has no lines, so it can't be sent.`, 422, "tier_empty");
+  const TIER_ORDER: Tier[] = ["Good", "Better", "Best"];
+  const activeTiers = TIER_ORDER.filter((t) => {
+    const tierRow = row.tiers.find((rt) => rt.level === tierToDb(t)!);
+    return tierRow && tierRow.lineItems.length > 0;
+  });
+
+  if (activeTiers.length === 0) {
+    throw new EstimateError("No packages have lines. Add at least one line before sending.", 422, "tier_empty");
   }
   if (!row.lead.ghlContactId) {
     throw new EstimateError("This customer isn't linked to a GoHighLevel contact.", 422, "customer_unlinked");
@@ -74,7 +83,14 @@ export async function sendEstimate(connection: GhlConnection, viewer: Viewer, es
   if (blocked) throw new EstimateError(blocked, 422, "email_blocked");
 
   const template = await findEstimateTemplate(connection);
-  await writeEstimateFields(connection, contact.id, estimateFieldValues(toUiEstimate(row, true), tier));
+  await writeEstimateFields(connection, contact.id, estimateFieldValues(toUiEstimate(row, true)));
+
+  // Primary tier for opportunity value pre-sign: Better when it is one of
+  // the packages sent, otherwise the first non-empty one. The final accepted
+  // tier is set later, from the customer's radio pick, in syncEstimateDocuments.
+  const primaryTier = activeTiers.includes("Better") ? "Better" : activeTiers[0];
+  const primaryLevel = tierToDb(primaryTier)!;
+  const primaryTierRow = row.tiers.find((t) => t.level === primaryLevel)!;
 
   let sent;
   try {
@@ -113,7 +129,7 @@ export async function sendEstimate(connection: GhlConnection, viewer: Viewer, es
       where: { id: row.id },
       data: {
         status: "SENT",
-        sentTier: level,
+        sentTier: primaryLevel,
         ghlDocumentId: sent.documentId,
         documentStatus: "SENT",
         documentUrl: sent.url,
@@ -127,7 +143,7 @@ export async function sendEstimate(connection: GhlConnection, viewer: Viewer, es
         estimateId: row.id,
         type: "sent",
         actorId: viewer.userId,
-        payload: { tier: level, documentId: sent.documentId },
+        payload: { tiers: activeTiers, documentId: sent.documentId },
       },
     }),
   ]);
@@ -139,7 +155,7 @@ export async function sendEstimate(connection: GhlConnection, viewer: Viewer, es
     const sentStage = pipeline.stages.find((s) => s.name.trim().toLowerCase() === "estimate sent");
     await updateOpportunity(connection, opp.id, {
       pipelineId: pipeline.id,
-      monetaryValue: Number(chosen.totalPrice),
+      monetaryValue: Number(primaryTierRow.totalPrice),
       ...(sentStage && opp.status === "open" ? { pipelineStageId: sentStage.id } : {}),
     });
   });
@@ -156,6 +172,61 @@ interface DocumentState {
   viewed: boolean;
   signerName: string | null;
   signerEmail: string | null;
+  /** The tier the customer picked with the "Select your package" radio on the
+   *  signed document, when the template carries one. Null when the template
+   *  has no radio - the fallback (sentTier || Better) takes over. */
+  selectedTier: Tier | null;
+}
+
+const TIER_ALIASES: { key: Tier; needle: RegExp }[] = [
+  { key: "Best", needle: /best|premium/i },
+  { key: "Better", needle: /better|preferred|recommended|middle/i },
+  { key: "Good", needle: /good|basic|standard/i },
+];
+
+/** Read the customer's radio-button pick out of the signed document. GHL
+ *  returns filled form fields in a few shapes (fields[], formFields[],
+ *  customFields[], recipients[].fields[]); we walk them all and match on
+ *  either a field labelled "select your package" or a value that IS a tier
+ *  name. Never guesses when nothing matches - the caller falls back. */
+function readSelectedTier(doc: GhlDocument): Tier | null {
+  const raw = doc.raw as Record<string, unknown>;
+
+  const candidateBuckets: Array<{ label?: string; value?: unknown }[]> = [];
+  for (const key of ["fields", "formFields", "customFields", "inputs"]) {
+    const v = raw[key];
+    if (Array.isArray(v)) candidateBuckets.push(v as { label?: string; value?: unknown }[]);
+  }
+  const recipients =
+    (raw.recipients as { fields?: { label?: string; value?: unknown }[] }[] | undefined) ?? [];
+  for (const rec of recipients) {
+    if (Array.isArray(rec.fields)) candidateBuckets.push(rec.fields);
+  }
+
+  const looksLikePackagePick = (label?: string) =>
+    !!label && /select.*package|choose.*package|package.*choice|which.*package/i.test(label);
+
+  // First pass: a field explicitly labelled as the package picker.
+  for (const bucket of candidateBuckets) {
+    for (const f of bucket) {
+      if (looksLikePackagePick(f?.label) && typeof f?.value === "string") {
+        const match = TIER_ALIASES.find((t) => t.needle.test(f.value as string));
+        if (match) return match.key;
+      }
+    }
+  }
+
+  // Second pass: any field whose value is (or contains) a tier name.
+  for (const bucket of candidateBuckets) {
+    for (const f of bucket) {
+      if (typeof f?.value === "string") {
+        const match = TIER_ALIASES.find((t) => t.needle.test(f.value as string));
+        if (match) return match.key;
+      }
+    }
+  }
+
+  return null;
 }
 
 function documentState(doc: GhlDocument): DocumentState {
@@ -166,11 +237,13 @@ function documentState(doc: GhlDocument): DocumentState {
   const signers = recipients.filter((r) => !r.role || r.role === "signer");
   const allCompleted = signers.length > 0 && signers.every((r) => r.hasCompleted);
   const signer = signers.find((r) => r.hasCompleted) ?? signers[0];
+  const signed = SIGNED_STATUSES.has(doc.status) || allCompleted;
   return {
-    signed: SIGNED_STATUSES.has(doc.status) || allCompleted,
+    signed,
     viewed: doc.status === "viewed",
     signerName: signer?.contactName ?? null,
     signerEmail: signer?.email ?? null,
+    selectedTier: signed ? readSelectedTier(doc) : null,
   };
 }
 
@@ -199,7 +272,10 @@ export async function syncEstimateDocuments(connection: GhlConnection, viewer: V
     const state = documentState(doc);
 
     if (state.signed) {
-      const level = row.sentTier ?? "BETTER";
+      // Prefer the customer's actual radio-button pick on the signed doc;
+      // fall back to whatever tier we sent as the primary one, then Better.
+      const level =
+        (state.selectedTier ? tierToDb(state.selectedTier) : null) ?? row.sentTier ?? "BETTER";
       // Whoever claims the row first records the approval; a parallel page load skips it.
       const claimed = await prisma.estimate.updateMany({
         where: { id: row.id, status: { in: ["SENT", "VIEWED"] } },

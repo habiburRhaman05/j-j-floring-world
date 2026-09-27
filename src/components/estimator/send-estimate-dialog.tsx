@@ -7,7 +7,7 @@ import { TIERS } from "@/lib/constants";
 import { useSendEstimate } from "@/lib/data/hooks";
 import { estimateTierTotals } from "@/lib/data/pricing";
 import { money2 } from "@/lib/format";
-import type { Estimate, Tier } from "@/lib/types";
+import type { Estimate } from "@/lib/types";
 
 interface SendEstimateDialogProps {
   estimate: Estimate;
@@ -17,10 +17,8 @@ interface SendEstimateDialogProps {
 }
 
 /**
- * The confirmation step before anything reaches a customer: which package
- * they are being asked to sign, and exactly who gets the email. The email is
- * sent by GoHighLevel from the business's own account, only when this
- * dialog's button is pressed, and never to someone who opted out.
+ * Confirmation before sending: shows which packages will go out and who
+ * receives them. All non-empty packages are sent so the customer can compare.
  */
 export function SendEstimateDialog({ estimate, onClose, onSent }: SendEstimateDialogProps) {
   const send = useSendEstimate();
@@ -28,13 +26,6 @@ export function SendEstimateDialog({ estimate, onClose, onSent }: SendEstimateDi
   const [open, setOpen] = useState(true);
 
   const available = TIERS.filter((t) => estimate.tiers[t].length > 0);
-  const [tier, setTier] = useState<Tier | null>(
-    estimate.sentTier && available.includes(estimate.sentTier)
-      ? estimate.sentTier
-      : available.includes("Better")
-        ? "Better"
-        : (available[0] ?? null),
-  );
 
   const customer = estimate.customer;
   const email = customer?.email?.trim() ?? "";
@@ -52,11 +43,11 @@ export function SendEstimateDialog({ estimate, onClose, onSent }: SendEstimateDi
       actions={[
         { label: "Cancel", variant: "ghost" },
         {
-          label: "Email to customer",
+          label: `Send ${available.length} package${available.length === 1 ? "" : "s"}`,
           variant: "primary",
           keep: true,
           onClick: async (close) => {
-            if (!tier) {
+            if (available.length === 0) {
               toast("Add at least one line to a package first.", "warn");
               return false;
             }
@@ -65,11 +56,10 @@ export function SendEstimateDialog({ estimate, onClose, onSent }: SendEstimateDi
               return false;
             }
             try {
-              const sent = (await send.mutateAsync([estimate.id, tier])) as { warning?: string | null } | null;
+              const sent = (await send.mutateAsync([estimate.id])) as { warning?: string | null } | null;
               if (sent?.warning) toast(sent.warning, "warn", 6000);
               else toast(`Sent. Waiting for ${customer?.name || "the customer"} to sign.`, "ok", 4200);
             } catch {
-              // The mutation hook has already said why (opted out, GoHighLevel refused, ...).
               return false;
             }
             onSent?.();
@@ -78,29 +68,22 @@ export function SendEstimateDialog({ estimate, onClose, onSent }: SendEstimateDi
         },
       ]}
     >
-      <div className="label">Which package should the customer approve?</div>
+      <div className="label">Packages included in this estimate</div>
       <div className="send-tiers">
         {TIERS.map((t) => {
           const lines = estimate.tiers[t];
           const empty = lines.length === 0;
           const totals = estimateTierTotals(lines, estimate.tierMeta[t], estimate.taxRate);
           return (
-            <label key={t} className={`send-tier${tier === t ? " active" : ""}${empty ? " disabled" : ""}`}>
-              <input
-                type="radio"
-                name="send-tier"
-                checked={tier === t}
-                disabled={empty}
-                onChange={() => setTier(t)}
-              />
+            <div key={t} className={`send-tier${empty ? " disabled" : " active"}`}>
               <span className="grow">
                 <strong>{estimate.tierMeta[t].label || t}</strong>
                 <span className="t-meta" style={{ display: "block" }}>
-                  {empty ? "No lines" : `${lines.length} line${lines.length === 1 ? "" : "s"}`}
+                  {empty ? "No lines - not included" : `${lines.length} line${lines.length === 1 ? "" : "s"}`}
                 </span>
               </span>
               <span className="t-num">{empty ? "-" : money2(totals.totalPrice)}</span>
-            </label>
+            </div>
           );
         })}
       </div>
@@ -109,8 +92,8 @@ export function SendEstimateDialog({ estimate, onClose, onSent }: SendEstimateDi
         {email ? (
           <>
             GoHighLevel will email <strong>{customer?.name}</strong> at <strong>{email}</strong> a document
-            to review and sign. The estimate then shows <strong>Waiting for approval</strong> until they
-            sign it.
+            with {available.length === 1 ? "this package" : `all ${available.length} packages`} to review
+            and sign. The estimate then shows <strong>Waiting for approval</strong> until they sign it.
           </>
         ) : (
           <>

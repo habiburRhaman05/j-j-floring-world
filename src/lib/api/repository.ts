@@ -59,7 +59,7 @@ export interface WorkspaceRepository {
 
   /* estimates */
   saveEstimate(fields: EstimateInput): Promise<Estimate>;
-  sendEstimate(estimateId: string, tier?: Tier): Promise<Estimate | null>;
+  sendEstimate(estimateId: string): Promise<Estimate | null>;
   markEstimateViewed(estimateId: string): Promise<Estimate | null>;
   signEstimate(
     estimateId: string,
@@ -175,8 +175,8 @@ export function createHttpRepository(): WorkspaceRepository {
       fields.id
         ? apiPut<Estimate>(endpoints.estimates.detail(fields.id), fields)
         : apiPost<Estimate>(endpoints.estimates.create, fields),
-    sendEstimate: (estimateId, tier) =>
-      apiPost<Estimate | null>(endpoints.estimates.send(estimateId), { tier: tier ?? "Better" }),
+    sendEstimate: (estimateId) =>
+      apiPost<Estimate | null>(endpoints.estimates.send(estimateId), {}),
     // Only the customer can approve, by signing the GHL document: an opened
     // estimate is picked up when the workspace loads, and there is no in-app sign.
     markEstimateViewed: async () => null,

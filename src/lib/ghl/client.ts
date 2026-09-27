@@ -647,6 +647,7 @@ export async function sendProposalTemplate(
 }
 
 export interface GhlDocument {
+
   id: string;
   name: string;
   status: string;
