@@ -30,6 +30,14 @@ export interface GhlInvoiceItem {
   currency?: string;
 }
 
+export interface GhlAddress {
+  addressLine1?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+  countryCode?: string;
+}
+
 export interface GhlInvoiceCreate {
   altId: string;
   altType: "location";
@@ -39,12 +47,21 @@ export interface GhlInvoiceCreate {
   currency: string;
   issueDate: string;
   dueDate?: string;
+  businessDetails: {
+    name: string;
+    address?: GhlAddress;
+    phoneNo?: string;
+    email?: string;
+    website?: string;
+    logoUrl?: string;
+    customValues?: string[];
+  };
   contactDetails: {
     id?: string;
     name: string;
     email?: string;
     phoneNo?: string;
-    address?: string;
+    address?: GhlAddress;
   };
   items: GhlInvoiceItem[];
   discount?: { value: number; type: "percentage" | "fixed" };
@@ -96,29 +113,51 @@ async function ghlInvoiceFetch<T>(connection: GhlConnection, path: string, init?
   return response.json() as Promise<T>;
 }
 
-async function createGhlInvoice(connection: GhlConnection, data: GhlInvoiceCreate) {
-  return ghlInvoiceFetch<{ invoice: GhlInvoiceResponse }>(connection, "/invoices/", {
+/** Extract the invoice object from any GHL response shape. */
+function extractInvoice(raw: Record<string, unknown>): GhlInvoiceResponse {
+  // GHL v3 may return { invoice: {...} }, { data: {...} }, or the invoice at root level
+  const inv = (raw.invoice ?? raw.data ?? raw) as GhlInvoiceResponse;
+  if (!inv._id && !inv.invoiceNumber) {
+    console.error("[invoice] Unexpected GHL response shape:", JSON.stringify(raw).slice(0, 500));
+    throw new Error(`GHL returned unexpected response (no _id or invoiceNumber). Keys: ${Object.keys(raw).join(", ")}`);
+  }
+  return inv;
+}
+
+/** Extract the invoices array from a list response. */
+function extractInvoiceList(raw: Record<string, unknown>): GhlInvoiceResponse[] {
+  const list = (raw.invoices ?? raw.data ?? []) as GhlInvoiceResponse[];
+  return Array.isArray(list) ? list : [];
+}
+
+async function createGhlInvoice(connection: GhlConnection, data: GhlInvoiceCreate): Promise<GhlInvoiceResponse> {
+  const raw = await ghlInvoiceFetch<Record<string, unknown>>(connection, "/invoices/", {
     method: "POST",
     body: JSON.stringify(data),
   });
+  console.log("[invoice] createGhlInvoice response keys:", Object.keys(raw));
+  return extractInvoice(raw);
 }
 
-async function getGhlInvoice(connection: GhlConnection, invoiceId: string, locationId: string) {
+async function getGhlInvoice(connection: GhlConnection, invoiceId: string, locationId: string): Promise<GhlInvoiceResponse> {
   const params = new URLSearchParams({ altId: locationId, altType: "location" });
-  return ghlInvoiceFetch<{ invoice: GhlInvoiceResponse }>(connection, `/invoices/${invoiceId}?${params}`);
+  const raw = await ghlInvoiceFetch<Record<string, unknown>>(connection, `/invoices/${invoiceId}?${params}`);
+  return extractInvoice(raw);
 }
 
-async function sendGhlInvoice(connection: GhlConnection, invoiceId: string, data: GhlInvoiceSend) {
-  return ghlInvoiceFetch<{ invoice: GhlInvoiceResponse }>(connection, `/invoices/${invoiceId}/send`, {
+async function sendGhlInvoice(connection: GhlConnection, invoiceId: string, data: GhlInvoiceSend): Promise<GhlInvoiceResponse> {
+  const raw = await ghlInvoiceFetch<Record<string, unknown>>(connection, `/invoices/${invoiceId}/send`, {
     method: "POST",
     body: JSON.stringify(data),
   });
+  return extractInvoice(raw);
 }
 
-async function listGhlInvoices(connection: GhlConnection, locationId: string, contactId?: string) {
+async function listGhlInvoices(connection: GhlConnection, locationId: string, contactId?: string): Promise<GhlInvoiceResponse[]> {
   const params = new URLSearchParams({ altId: locationId, altType: "location", limit: "100" });
   if (contactId) params.set("contactId", contactId);
-  return ghlInvoiceFetch<{ invoices: GhlInvoiceResponse[] }>(connection, `/invoices/?${params}`);
+  const raw = await ghlInvoiceFetch<Record<string, unknown>>(connection, `/invoices/?${params}`);
+  return extractInvoiceList(raw);
 }
 
 async function deleteGhlInvoice(connection: GhlConnection, invoiceId: string, locationId: string) {
@@ -232,9 +271,23 @@ export async function createAndSendInvoice(
   const liveMode = process.env.GHL_INVOICE_LIVE_MODE === "true";
 
   const customerName = `${estimate.lead.firstName} ${estimate.lead.lastName}`.trim();
-  const customerAddress = [estimate.lead.addressLine1, estimate.lead.city, estimate.lead.state, estimate.lead.postalCode]
-    .filter(Boolean)
-    .join(", ");
+  const customerAddress: GhlAddress = {
+    addressLine1: estimate.lead.addressLine1 || undefined,
+    city: estimate.lead.city || undefined,
+    state: estimate.lead.state || undefined,
+    postalCode: estimate.lead.postalCode || undefined,
+    countryCode: "US",
+  };
+
+  // Business details from env vars (required by GHL Invoice API v3)
+  const businessName = process.env.GHL_BUSINESS_NAME || "J&J Flooring World";
+  const businessAddress: GhlAddress = {
+    addressLine1: process.env.GHL_BUSINESS_ADDRESS || undefined,
+    city: process.env.GHL_BUSINESS_CITY || undefined,
+    state: process.env.GHL_BUSINESS_STATE || undefined,
+    postalCode: process.env.GHL_BUSINESS_ZIP || undefined,
+    countryCode: "US",
+  };
 
   const invoiceItems: GhlInvoiceItem[] = tier.lineItems.map((line) => ({
     name: line.name,
@@ -261,12 +314,19 @@ export async function createAndSendInvoice(
     currency: "USD",
     issueDate: todayISO(),
     dueDate: dueDateISO(),
+    businessDetails: {
+      name: businessName,
+      address: businessAddress,
+      phoneNo: process.env.GHL_BUSINESS_PHONE || undefined,
+      email: process.env.GHL_BUSINESS_EMAIL || undefined,
+      website: process.env.GHL_BUSINESS_WEBSITE || undefined,
+    },
     contactDetails: {
       id: estimate.lead.ghlContactId || undefined,
       name: customerName,
       email: estimate.lead.email || undefined,
       phoneNo: estimate.lead.phone || undefined,
-      address: customerAddress || undefined,
+      address: customerAddress,
     },
     items: invoiceItems,
     discount: discountAmount > 0 ? { value: discountAmount, type: "fixed" } : undefined,
@@ -280,8 +340,8 @@ export async function createAndSendInvoice(
   let ghlInvoiceId: string | null = null;
   if (estimate.lead.ghlContactId) {
     try {
-      const existing = await listGhlInvoices(connection, connection.locationId, estimate.lead.ghlContactId);
-      const match = existing.invoices?.find(
+      const existingList = await listGhlInvoices(connection, connection.locationId, estimate.lead.ghlContactId);
+      const match = existingList.find(
         (inv) => inv.name === payload.name || inv.invoiceNumber === estNum,
       );
       if (match) {
@@ -294,13 +354,13 @@ export async function createAndSendInvoice(
 
   // ── Create invoice as draft if none exists ──────────────────────────
   if (!ghlInvoiceId) {
-    const result = await createGhlInvoice(connection, payload);
-    ghlInvoiceId = result.invoice._id;
+    const created = await createGhlInvoice(connection, payload);
+    ghlInvoiceId = created._id;
   }
 
   // ── Fetch back and verify total ─────────────────────────────────────
   const fetched = await getGhlInvoice(connection, ghlInvoiceId, connection.locationId);
-  if (!verifyTotal(fetched.invoice.total, expectedTotal)) {
+  if (!verifyTotal(fetched.total, expectedTotal)) {
     try {
       await deleteGhlInvoice(connection, ghlInvoiceId, connection.locationId);
     } catch {
@@ -308,15 +368,37 @@ export async function createAndSendInvoice(
     }
     throw new InvoiceError(
       422,
-      `Invoice total mismatch: expected ${expectedTotal}, GHL returned ${fetched.invoice.total}. Draft deleted.`,
+      `Invoice total mismatch: expected ${expectedTotal}, GHL returned ${fetched.total}. Draft deleted.`,
     );
+  }
+
+  // ── Resolve a valid GHL userId for sending ──────────────────────────
+  let sendUserId = viewer.ghlUserId;
+  if (!sendUserId) {
+    // Webhook call has no ghlUserId. Look up the estimate's sales rep.
+    const rep = await prisma.user.findUnique({
+      where: { id: estimate.repId },
+      select: { ghlUserId: true },
+    });
+    sendUserId = rep?.ghlUserId ?? null;
+  }
+  if (!sendUserId) {
+    // Last resort: find any user with a ghlUserId in the system
+    const anyUser = await prisma.user.findFirst({
+      where: { ghlUserId: { not: null } },
+      select: { ghlUserId: true },
+    });
+    sendUserId = anyUser?.ghlUserId ?? null;
+  }
+  if (!sendUserId) {
+    throw new InvoiceError(400, "No GHL user ID found. Cannot send invoice. Ensure sales reps have GHL accounts linked.");
   }
 
   // ── Send the invoice ────────────────────────────────────────────────
   await sendGhlInvoice(connection, ghlInvoiceId, {
     altId: connection.locationId,
     altType: "location",
-    userId: viewer.ghlUserId ?? viewer.userId,
+    userId: sendUserId,
     action: "email",
     liveMode,
   });
