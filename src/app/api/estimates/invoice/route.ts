@@ -18,7 +18,7 @@ import {
  *   2. App UI: session cookie auth via withSalesViewer()
  *
  * Body: { estimateId: string, selectedPackage: "good" | "better" | "best" }
- * Uses test mode by default (GHL_INVOICE_LIVE_MODE env, defaults false).
+ * estimateId = the human-facing estimate number, e.g. "EST-2026-0016"
  */
 export async function POST(request: NextRequest) {
   try {
@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
     let viewer: Viewer;
 
     const envSecret = process.env.GHL_WEBHOOK_SECRET;
-    // Accept secret from header OR query parameter (GHL webhooks can't send headers)
+    // Accept secret from header OR query parameter (GHL webhooks can't always send headers)
     const webhookSecret =
       request.headers.get("x-webhook-secret") ||
       request.nextUrl.searchParams.get("secret");
@@ -59,16 +59,19 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => null);
     if (!body) return errorResponse(400, "Invalid JSON body");
 
-    // ── Validate estimateId ─────────────────────────────────────────────
+    // Log the incoming body for debugging webhook payloads
+    console.log("[invoice] Incoming body:", JSON.stringify(body).slice(0, 1000));
+
+    // ── Validate estimateId (human-facing number, e.g. EST-2026-0016) ──
     const estimateId = body.estimateId;
     if (!estimateId || typeof estimateId !== "string") {
-      return errorResponse(400, "estimateId is required");
+      return errorResponse(400, `estimateId is required. Received keys: ${Object.keys(body).join(", ")}`);
     }
 
     // ── Validate selectedPackage ─────────────────────────────────────────
     const rawTier = body.selectedPackage;
     if (!rawTier || typeof rawTier !== "string") {
-      return errorResponse(400, "selectedPackage is required (good, better, or best)");
+      return errorResponse(400, `selectedPackage is required (good, better, or best). Received keys: ${Object.keys(body).join(", ")}`);
     }
 
     const selectedTier = normalizeTier(rawTier);
@@ -88,9 +91,10 @@ export async function POST(request: NextRequest) {
     if (error instanceof InvoiceError) {
       return errorResponse(error.status, error.message, { code: error.code });
     }
-    console.error("Invoice endpoint error:", error);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.error("Invoice endpoint error:", errMsg, error);
     return NextResponse.json(
-      { error: "Failed to create invoice" },
+      { error: "Failed to create invoice", detail: errMsg },
       { status: 500 },
     );
   }

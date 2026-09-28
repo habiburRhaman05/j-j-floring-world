@@ -172,12 +172,12 @@ export interface InvoiceResult {
 export async function createAndSendInvoice(
   connection: GhlConnection,
   viewer: Viewer,
-  estimateId: string,
+  estimateNumber: string,
   selectedTier: TierLevel,
 ): Promise<InvoiceResult> {
   // ── Load estimate with tiers and line items ─────────────────────────
   const estimate = await prisma.estimate.findUnique({
-    where: { id: estimateId },
+    where: { number: estimateNumber },
     include: {
       lead: true,
       tiers: {
@@ -186,7 +186,7 @@ export async function createAndSendInvoice(
     },
   });
 
-  if (!estimate) throw new InvoiceError(404, "Estimate not found");
+  if (!estimate) throw new InvoiceError(404, `Estimate "${estimateNumber}" not found`);
 
   // ── Access check: rep can only invoice their own estimates ───────────
   if (!viewer.isAdmin && estimate.repId !== viewer.userId) {
@@ -348,7 +348,7 @@ export async function createAndSendInvoice(
 
   // ── Update estimate status ──────────────────────────────────────────
   await prisma.estimate.update({
-    where: { id: estimateId },
+    where: { id: estimate.id },
     data: {
       sentTier: selectedTier,
       status: "SENT",
