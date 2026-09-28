@@ -13,7 +13,7 @@ import type { Estimate, Tier } from "@/lib/types";
 /* ==========================================================================
    ghl-document.server.ts  -  what the GHL estimate document is filled from
    --------------------------------------------------------------------------
-   The template ("estimate-template" by default) is built once in GHL. Each
+   The template ("JJ_Flooring_Estimate" by default) is built once in GHL. Each
    send writes this estimate's figures onto the contact's custom fields, and
    the template reads them back with merge tags such as
    {{contact.estimate___good___total}}.
@@ -33,7 +33,7 @@ import type { Estimate, Tier } from "@/lib/types";
    location already carries.
    ========================================================================== */
 
-export const ESTIMATE_TEMPLATE_NAME = process.env.GHL_ESTIMATE_TEMPLATE_NAME?.trim() || "estimate-template";
+export const ESTIMATE_TEMPLATE_NAME = process.env.GHL_ESTIMATE_TEMPLATE_NAME?.trim() || "JJ_Flooring_Estimate";
 
 const TIERS_ORDERED: Tier[] = ["Good", "Better", "Best"];
 
