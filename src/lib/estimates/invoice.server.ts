@@ -177,11 +177,19 @@ function dueDateISO(): string {
   return d.toISOString().slice(0, 10);
 }
 
-/** Normalize any casing to TierLevel enum value. */
+/** Normalize any casing / variation to TierLevel enum value.
+ *  Handles: "good", "Good Package", "BETTER", "best - option", etc.
+ */
 export function normalizeTier(raw: string): TierLevel | null {
   const lower = raw.toLowerCase().trim();
+  // Exact match first
   const map: Record<string, TierLevel> = { good: "GOOD", better: "BETTER", best: "BEST" };
-  return map[lower] ?? null;
+  if (map[lower]) return map[lower];
+  // Partial match: GHL may send "Good Package", "Best Option", etc.
+  if (lower.includes("good")) return "GOOD";
+  if (lower.includes("better")) return "BETTER";
+  if (lower.includes("best")) return "BEST";
+  return null;
 }
 
 /** Display label for a tier. */

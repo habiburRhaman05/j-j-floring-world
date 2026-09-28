@@ -62,14 +62,23 @@ export async function POST(request: NextRequest) {
     // Log the incoming body for debugging webhook payloads
     console.log("[invoice] Incoming body:", JSON.stringify(body).slice(0, 1000));
 
-    // ── Validate estimateId (human-facing number, e.g. EST-2026-0016) ──
-    const estimateId = body.estimateId;
+    // ── Map GHL custom field names to expected keys ────────────────────
+    // GHL webhook sends ALL contact custom fields with their display names
+    // as keys (e.g. "Estimate - Number"), not our internal names.
+    const estimateId =
+      body.estimateId ||
+      body["Estimate - Number"] ||
+      body["estimate-number"] ||
+      body["estimateNumber"];
     if (!estimateId || typeof estimateId !== "string") {
       return errorResponse(400, `estimateId is required. Received keys: ${Object.keys(body).join(", ")}`);
     }
 
-    // ── Validate selectedPackage ─────────────────────────────────────────
-    const rawTier = body.selectedPackage;
+    const rawTier =
+      body.selectedPackage ||
+      body["selected-package-text"] ||
+      body["Selected Option"] ||
+      body["selectedOption"];
     if (!rawTier || typeof rawTier !== "string") {
       return errorResponse(400, `selectedPackage is required (good, better, or best). Received keys: ${Object.keys(body).join(", ")}`);
     }
