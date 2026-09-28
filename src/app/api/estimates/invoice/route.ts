@@ -13,7 +13,8 @@ import {
  * POST /api/estimates/invoice
  *
  * Two auth paths:
- *   1. GHL webhook: sends x-webhook-secret header (matches GHL_WEBHOOK_SECRET env)
+ *   1. GHL webhook: sends secret via query param (?secret=...) or
+ *      x-webhook-secret header (matches GHL_WEBHOOK_SECRET env).
  *   2. App UI: session cookie auth via withSalesViewer()
  *
  * Body: { estimateId: string, selectedPackage: "good" | "better" | "best" }
@@ -25,8 +26,11 @@ export async function POST(request: NextRequest) {
     let connection: GhlConnection;
     let viewer: Viewer;
 
-    const webhookSecret = request.headers.get("x-webhook-secret");
     const envSecret = process.env.GHL_WEBHOOK_SECRET;
+    // Accept secret from header OR query parameter (GHL webhooks can't send headers)
+    const webhookSecret =
+      request.headers.get("x-webhook-secret") ||
+      request.nextUrl.searchParams.get("secret");
 
     if (webhookSecret && envSecret && webhookSecret === envSecret) {
       // Webhook auth: GHL calling us. Load connection directly.
