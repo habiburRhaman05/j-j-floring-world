@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { apiRoute } from "@/lib/api/api-route";
 import { errorResponse } from "@/lib/api/server-response";
+import { getGhlConnection, type GhlConnection } from "@/lib/ghl/client";
 import { withSalesViewer } from "@/lib/ghl/sales-route";
+import type { Viewer } from "@/lib/ghl/sales-board";
 import {
   createAndSendInvoice,
   InvoiceError,
@@ -11,42 +12,70 @@ import {
 /**
  * POST /api/estimates/invoice
  *
- * GHL sends estimateId + selectedPackage in the body (not URL params).
- * Creates a GHL invoice from the estimate's line items for the selected
- * package, verifies the total matches, then sends it to the customer.
+ * Two auth paths:
+ *   1. GHL webhook: sends x-webhook-secret header (matches GHL_WEBHOOK_SECRET env)
+ *   2. App UI: session cookie auth via withSalesViewer()
  *
  * Body: { estimateId: string, selectedPackage: "good" | "better" | "best" }
- *
  * Uses test mode by default (GHL_INVOICE_LIVE_MODE env, defaults false).
  */
-export const POST = apiRoute(async (request: NextRequest) => {
-  const gate = await withSalesViewer();
-  if (gate.error) return gate.error;
-
-  const body = await request.json().catch(() => null);
-  if (!body) return errorResponse(400, "Invalid JSON body");
-
-  // ── Validate estimateId ────────────────────────────────────────────
-  const estimateId = body.estimateId;
-  if (!estimateId || typeof estimateId !== "string") {
-    return errorResponse(400, "estimateId is required");
-  }
-
-  // ── Validate selectedPackage ────────────────────────────────────────
-  const rawTier = body.selectedPackage;
-  if (!rawTier || typeof rawTier !== "string") {
-    return errorResponse(400, "selectedPackage is required (good, better, or best)");
-  }
-
-  const selectedTier = normalizeTier(rawTier);
-  if (!selectedTier) {
-    return errorResponse(400, `Invalid package: "${rawTier}". Must be good, better, or best.`);
-  }
-
+export async function POST(request: NextRequest) {
   try {
+    // ── Auth: webhook secret OR session cookie ──────────────────────────
+    let connection: GhlConnection;
+    let viewer: Viewer;
+
+    const webhookSecret = request.headers.get("x-webhook-secret");
+    const envSecret = process.env.GHL_WEBHOOK_SECRET;
+
+    if (webhookSecret && envSecret && webhookSecret === envSecret) {
+      // Webhook auth: GHL calling us. Load connection directly.
+      const conn = await getGhlConnection();
+      if (!conn) {
+        return NextResponse.json(
+          { error: "GHL not configured" },
+          { status: 503 },
+        );
+      }
+      connection = conn;
+      // Webhook acts as admin (no specific user session)
+      viewer = { userId: "webhook", isAdmin: true, ghlUserId: null };
+    } else if (webhookSecret) {
+      // Secret was sent but doesn't match
+      return NextResponse.json({ error: "Invalid webhook secret" }, { status: 401 });
+    } else {
+      // Session auth: called from app UI
+      const gate = await withSalesViewer();
+      if (gate.error) return gate.error;
+      connection = gate.connection;
+      viewer = gate.viewer;
+    }
+
+    // ── Parse body ──────────────────────────────────────────────────────
+    const body = await request.json().catch(() => null);
+    if (!body) return errorResponse(400, "Invalid JSON body");
+
+    // ── Validate estimateId ─────────────────────────────────────────────
+    const estimateId = body.estimateId;
+    if (!estimateId || typeof estimateId !== "string") {
+      return errorResponse(400, "estimateId is required");
+    }
+
+    // ── Validate selectedPackage ─────────────────────────────────────────
+    const rawTier = body.selectedPackage;
+    if (!rawTier || typeof rawTier !== "string") {
+      return errorResponse(400, "selectedPackage is required (good, better, or best)");
+    }
+
+    const selectedTier = normalizeTier(rawTier);
+    if (!selectedTier) {
+      return errorResponse(400, `Invalid package: "${rawTier}". Must be good, better, or best.`);
+    }
+
+    // ── Create and send invoice ─────────────────────────────────────────
     const result = await createAndSendInvoice(
-      gate.connection,
-      gate.viewer,
+      connection,
+      viewer,
       estimateId,
       selectedTier,
     );
@@ -55,6 +84,10 @@ export const POST = apiRoute(async (request: NextRequest) => {
     if (error instanceof InvoiceError) {
       return errorResponse(error.status, error.message, { code: error.code });
     }
-    throw error; // apiRoute catches and returns 500
+    console.error("Invoice endpoint error:", error);
+    return NextResponse.json(
+      { error: "Failed to create invoice" },
+      { status: 500 },
+    );
   }
-});
+}
