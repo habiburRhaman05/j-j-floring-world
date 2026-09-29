@@ -177,19 +177,11 @@ function dueDateISO(): string {
   return d.toISOString().slice(0, 10);
 }
 
-/** Normalize any casing / variation to TierLevel enum value.
- *  Handles: "good", "Good Package", "BETTER", "best - option", etc.
- */
+/** Normalize any casing to TierLevel enum value. */
 export function normalizeTier(raw: string): TierLevel | null {
   const lower = raw.toLowerCase().trim();
-  // Exact match first
   const map: Record<string, TierLevel> = { good: "GOOD", better: "BETTER", best: "BEST" };
-  if (map[lower]) return map[lower];
-  // Partial match: GHL may send "Good Package", "Best Option", etc.
-  if (lower.includes("good")) return "GOOD";
-  if (lower.includes("better")) return "BETTER";
-  if (lower.includes("best")) return "BEST";
-  return null;
+  return map[lower] ?? null;
 }
 
 /** Display label for a tier. */
@@ -306,19 +298,26 @@ export async function createAndSendInvoice(
   }));
 
   const termsNotes = [
-    `<p><strong>Estimate:</strong> ${estNum}</p>`,
-    `<p><strong>Package:</strong> ${label}</p>`,
-    estimate.customerNotes ? `<p><strong>Notes:</strong> ${estimate.customerNotes}</p>` : "",
+    `<div style="border-top:1px solid #e0e0e0;padding-top:12px;margin-top:12px;">`,
+    `<p style="margin:4px 0;"><strong>Estimate:</strong> ${estNum}</p>`,
+    `<p style="margin:4px 0;"><strong>Package:</strong> ${label}</p>`,
+    estimate.customerNotes
+      ? `<p style="margin:4px 0;"><strong>Notes:</strong> ${estimate.customerNotes}</p>`
+      : "",
+    `<p style="margin:12px 0 4px 0;font-size:12px;color:#666;">Thank you for choosing J&J Flooring World. Payment is due within 14 days of invoice date.</p>`,
+    `</div>`,
   ]
     .filter(Boolean)
     .join("\n");
+
+  const invNumber = estNum.replace("EST-", "INV-");
 
   const payload: GhlInvoiceCreate = {
     altId: connection.locationId,
     altType: "location",
     name: `${estNum} - ${label} Package`,
     title: `${estNum} - ${label} Package`,
-    invoiceNumber: estNum,
+    invoiceNumber: invNumber,
     currency: "USD",
     issueDate: todayISO(),
     dueDate: dueDateISO(),
@@ -328,6 +327,7 @@ export async function createAndSendInvoice(
       phoneNo: process.env.GHL_BUSINESS_PHONE || undefined,
       email: process.env.GHL_BUSINESS_EMAIL || undefined,
       website: process.env.GHL_BUSINESS_WEBSITE || undefined,
+      logoUrl: process.env.GHL_BUSINESS_LOGO || undefined,
     },
     contactDetails: {
       id: estimate.lead.ghlContactId || undefined,
@@ -350,7 +350,7 @@ export async function createAndSendInvoice(
     try {
       const existingList = await listGhlInvoices(connection, connection.locationId, estimate.lead.ghlContactId);
       const match = existingList.find(
-        (inv) => inv.name === payload.name || inv.invoiceNumber === estNum,
+        (inv) => inv.name === payload.name || inv.invoiceNumber === invNumber || inv.invoiceNumber === estNum,
       );
       if (match) {
         ghlInvoiceId = match._id;
