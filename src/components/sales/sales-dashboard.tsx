@@ -217,11 +217,30 @@ export function SalesDashboard({ scope }: { scope: "all" | "own" }) {
           }
           tone="gold"
         />
+        <Stat
+          label="Appointment fees"
+          value={money(totals.appointmentFees)}
+          note={`$${data.rates.appointmentFee ?? 75} x ${totals.wonCount} won`}
+        />
+        <Stat
+          label={isAdmin ? "Total rep pay" : "My total pay"}
+          value={money(totals.totalRepPay)}
+          note="Commission + appointment fees"
+          tone="gold"
+        />
         {showMargin ? (
           <Stat
             label="Est. gross margin"
             value={money(totals.estMargin)}
             note={`${data.rates.marginPercent}% of won revenue`}
+          />
+        ) : null}
+        {showMargin ? (
+          <Stat
+            label="Business keeps"
+            value={money(totals.businessKeeps)}
+            note="Est. margin - total rep pay"
+            tone={totals.businessKeeps !== null && totals.businessKeeps >= 0 ? "good" : undefined}
           />
         ) : null}
       </StatStrip>
@@ -249,7 +268,10 @@ export function SalesDashboard({ scope }: { scope: "all" | "own" }) {
                   <Th numeric>Avg close</Th>
                   <Th numeric>Comm %</Th>
                   <Th numeric>Commission</Th>
+                  <Th numeric>Appt fees</Th>
+                  <Th numeric>Total pay</Th>
                   {showMargin ? <Th numeric>Est. margin</Th> : null}
+                  {showMargin ? <Th numeric>Biz keeps</Th> : null}
                 </Tr>
               </THead>
               <TBody>
@@ -276,7 +298,10 @@ export function SalesDashboard({ scope }: { scope: "all" | "own" }) {
                     <Td numeric>{days(row.metrics.avgDaysToClose)}</Td>
                     <Td numeric>{row.ownerUserId ? `${row.commissionPercent}%` : "-"}</Td>
                     <Td numeric>{row.ownerUserId ? money(row.metrics.commission) : "-"}</Td>
+                    <Td numeric>{row.ownerUserId ? money(row.metrics.appointmentFees) : "-"}</Td>
+                    <Td numeric>{row.ownerUserId ? money(row.metrics.totalRepPay) : "-"}</Td>
                     {showMargin ? <Td numeric>{money(row.metrics.estMargin)}</Td> : null}
+                    {showMargin ? <Td numeric>{money(row.metrics.businessKeeps)}</Td> : null}
                   </Tr>
                 ))}
               </TBody>
@@ -384,7 +409,9 @@ export function SalesDashboard({ scope }: { scope: "all" | "own" }) {
                 <Th numeric>Lost</Th>
                 <Th numeric>Win rate</Th>
                 <Th numeric>Commission</Th>
+                <Th numeric>Total pay</Th>
                 {showMargin ? <Th numeric>Est. margin</Th> : null}
+                {showMargin ? <Th numeric>Biz keeps</Th> : null}
               </Tr>
             </THead>
             <TBody>
@@ -495,7 +522,9 @@ function MonthLine({
       <Td numeric>{m.lostCount}</Td>
       <Td numeric>{m.winRate === null ? "-" : pct(m.winRate)}</Td>
       <Td numeric>{money(m.commission)}</Td>
+      <Td numeric>{money(m.totalRepPay)}</Td>
       {showMargin ? <Td numeric>{money(m.estMargin)}</Td> : null}
+      {showMargin ? <Td numeric>{money(m.businessKeeps)}</Td> : null}
     </Tr>
   );
 }
@@ -505,11 +534,35 @@ function RatesPanel({ data }: { data: SalesBoardResponse }) {
   const save = useSaveSalesRates();
   const [defaultPct, setDefaultPct] = useState(String(data.rates.defaultCommissionPercent));
   const [marginPct, setMarginPct] = useState(String(data.rates.marginPercent ?? 35));
+  const [apptFee, setApptFee] = useState(String(data.rates.appointmentFee ?? 75));
   const [repPct, setRepPct] = useState<Record<string, string>>(() =>
     Object.fromEntries(
       data.reps.map((r) => [r.userId, r.userId in data.rates.repCommissionPercent ? String(data.rates.repCommissionPercent[r.userId]) : ""]),
     ),
   );
+
+  const defaultTiers = data.rates.commissionTiers ?? [];
+  const [tiers, setTiers] = useState(() =>
+    defaultTiers.map((t) => ({
+      maxDiscount: t.maxDiscountPercent === null ? "" : String(t.maxDiscountPercent),
+      commission: String(t.commissionPercent),
+    })),
+  );
+
+  const updateTier = (idx: number, field: "maxDiscount" | "commission", val: string) => {
+    setTiers((prev) => prev.map((t, i) => (i === idx ? { ...t, [field]: val } : t)));
+  };
+
+  const addTier = () => setTiers((prev) => [...prev, { maxDiscount: "", commission: "" }]);
+  const removeTier = (idx: number) => setTiers((prev) => prev.filter((_, i) => i !== idx));
+
+  const buildTiers = () =>
+    tiers
+      .filter((t) => t.commission.trim() !== "")
+      .map((t) => ({
+        maxDiscountPercent: t.maxDiscount.trim() === "" ? null : Number(t.maxDiscount) || 0,
+        commissionPercent: Number(t.commission) || 0,
+      }));
 
   return (
     <Panel style={{ marginTop: 16 }}>
@@ -529,6 +582,9 @@ function RatesPanel({ data }: { data: SalesBoardResponse }) {
           </Field>
           <Field label="Average gross margin %">
             <Input type="number" min={0} max={100} step={1} value={marginPct} onChange={(e) => setMarginPct(e.target.value)} />
+          </Field>
+          <Field label="Appointment fee ($)">
+            <Input type="number" min={0} step={5} value={apptFee} onChange={(e) => setApptFee(e.target.value)} />
           </Field>
         </div>
         {data.reps.length ? (
@@ -552,6 +608,60 @@ function RatesPanel({ data }: { data: SalesBoardResponse }) {
             No users have the Sales Rep role yet.
           </div>
         )}
+
+        <div style={{ marginTop: 16, marginBottom: 12 }}>
+          <h4 style={{ margin: "0 0 4px" }}>Commission tiers by discount %</h4>
+          <div className="t-meta" style={{ marginBottom: 8 }}>
+            When a deal&apos;s total discount % is known, the commission rate is looked up from this
+            table instead of the flat default. Leave &ldquo;Max discount&rdquo; blank for the final
+            catch-all tier (owner approval / 0%).
+          </div>
+          <table className="product-variants-table" style={{ marginBottom: 8 }}>
+            <thead>
+              <tr>
+                <th>Max discount %</th>
+                <th>Commission %</th>
+                <th style={{ width: 40 }} />
+              </tr>
+            </thead>
+            <tbody>
+              {tiers.map((t, i) => (
+                <tr key={i}>
+                  <td>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={1}
+                      placeholder="No limit"
+                      value={t.maxDiscount}
+                      onChange={(e) => updateTier(i, "maxDiscount", e.target.value)}
+                    />
+                  </td>
+                  <td>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={0.5}
+                      value={t.commission}
+                      onChange={(e) => updateTier(i, "commission", e.target.value)}
+                    />
+                  </td>
+                  <td>
+                    <Button size="sm" variant="ghost" onClick={() => removeTier(i)}>
+                      &times;
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <Button size="sm" variant="ghost" onClick={addTier}>
+            + Add tier
+          </Button>
+        </div>
+
         <Button
           variant="primary"
           size="sm"
@@ -560,6 +670,8 @@ function RatesPanel({ data }: { data: SalesBoardResponse }) {
             save.mutate({
               defaultCommissionPercent: Number(defaultPct) || 0,
               marginPercent: Number(marginPct) || 0,
+              appointmentFee: Number(apptFee) || 0,
+              commissionTiers: buildTiers(),
               repCommissionPercent: Object.fromEntries(
                 Object.entries(repPct)
                   .filter(([, v]) => v.trim() !== "")

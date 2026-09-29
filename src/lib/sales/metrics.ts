@@ -110,8 +110,14 @@ export interface SalesMetrics {
   /** Mean days from created to won; null when nothing won. */
   avgDaysToClose: number | null;
   commission: number;
+  /** Flat appointment fee x won deals. */
+  appointmentFees: number;
+  /** commission + appointmentFees */
+  totalRepPay: number;
   /** null when the viewer is not shown margin. */
   estMargin: number | null;
+  /** estMargin - totalRepPay; null when margin is hidden. */
+  businessKeeps: number | null;
   /** Open opportunities per stage id. */
   openByStage: Record<string, { count: number; value: number }>;
 }
@@ -137,7 +143,10 @@ export function computeMetrics(
     avgDealSize: null,
     avgDaysToClose: null,
     commission: 0,
+    appointmentFees: 0,
+    totalRepPay: 0,
     estMargin: rates.marginPercent === null ? null : 0,
+    businessKeeps: rates.marginPercent === null ? null : 0,
     openByStage: {},
   };
   let daysTotal = 0;
@@ -178,8 +187,11 @@ export function computeMetrics(
   m.wonValue = round2(m.wonValue);
   m.lostValue = round2(m.lostValue);
   m.commission = round2(m.commission);
+  m.appointmentFees = round2(m.wonCount * (rates.appointmentFee ?? 0));
+  m.totalRepPay = round2(m.commission + m.appointmentFees);
   if (m.estMargin !== null && rates.marginPercent !== null) {
     m.estMargin = round2(m.wonValue * (rates.marginPercent / 100));
+    m.businessKeeps = round2(m.estMargin - m.totalRepPay);
   }
   return m;
 }

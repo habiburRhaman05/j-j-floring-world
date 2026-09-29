@@ -191,6 +191,8 @@ export async function fetchSalesBoard(connection: GhlConnection, viewer: Viewer)
             viewer.userId in rates.repCommissionPercent
               ? { [viewer.userId]: rates.repCommissionPercent[viewer.userId]! }
               : {},
+          appointmentFee: rates.appointmentFee,
+          commissionTiers: rates.commissionTiers,
         },
     notice:
       !viewer.isAdmin && !viewer.ghlUserId

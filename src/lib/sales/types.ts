@@ -37,10 +37,19 @@ export interface SalesAssignedContact {
   ownerName: string;
 }
 
+export interface CommissionTier {
+  maxDiscountPercent: number | null;
+  commissionPercent: number;
+}
+
 /**
  * Commission and margin inputs. GHL stores only the sale value, so margin is
  * an estimate from the company's average gross margin; commission is a
  * percent of won revenue, per rep when set, else the default.
+ *
+ * `commissionTiers` maps a discount-percentage bracket to a commission rate
+ * (from the Costing spreadsheet). `appointmentFee` is a flat dollar amount
+ * added to every rep's pay per closed deal.
  */
 export interface SalesRates {
   defaultCommissionPercent: number;
@@ -48,6 +57,10 @@ export interface SalesRates {
   marginPercent: number | null;
   /** userId -> commission percent. A rep only ever receives their own. */
   repCommissionPercent: Record<string, number>;
+  /** Flat fee per closed deal added to rep pay ($75 default). */
+  appointmentFee: number;
+  /** Tiered commission: rate depends on the total discount % given. */
+  commissionTiers: CommissionTier[];
 }
 
 export interface SalesBoardResponse {

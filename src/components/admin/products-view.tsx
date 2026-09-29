@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Panel, PanelBody, PanelHead } from "@/components/ui/panel";
@@ -10,6 +9,25 @@ import { usePriceBook } from "@/lib/pricebook/hooks";
 import type { PriceBookItem } from "@/lib/pricebook/types";
 import { money2 } from "@/lib/format";
 
+interface ProductGroup {
+  productId: string;
+  name: string;
+  variants: PriceBookItem[];
+}
+
+function groupByProduct(items: PriceBookItem[]): ProductGroup[] {
+  const map = new Map<string, ProductGroup>();
+  for (const item of items) {
+    let group = map.get(item.productId);
+    if (!group) {
+      group = { productId: item.productId, name: item.name, variants: [] };
+      map.set(item.productId, group);
+    }
+    group.variants.push(item);
+  }
+  return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
 export function AdminProducts() {
   const { data, isLoading, error } = usePriceBook();
   const products = data?.products ?? [];
@@ -17,7 +35,7 @@ export function AdminProducts() {
   const [search, setSearch] = useState("");
 
   const query = search.trim().toLowerCase();
-  const list = products.filter((p) => {
+  const filtered = products.filter((p) => {
     if (!query) return true;
     return (
       p.name.toLowerCase().includes(query) ||
@@ -26,58 +44,8 @@ export function AdminProducts() {
     );
   });
 
-  const columns: DataTableColumn<PriceBookItem>[] = [
-    {
-      accessorKey: "name",
-      header: "Product",
-      cell: ({ row }) => {
-        const p = row.original;
-        const desc = p.description
-          ? p.description.length > 80
-            ? `${p.description.slice(0, 80)}…`
-            : p.description
-          : null;
-        return (
-          <>
-            <div style={{ fontWeight: 500 }}>{p.name}</div>
-            {p.priceLabel ? <div className="t-meta">{p.priceLabel}</div> : null}
-            {desc ? <div className="t-meta">{desc}</div> : null}
-          </>
-        );
-      },
-    },
-    {
-      accessorKey: "unit",
-      header: "Unit",
-      meta: { className: "muted col-tight" },
-      cell: ({ row }) => <Pill className="pill-outline">{row.original.unit}</Pill>,
-    },
-    {
-      accessorKey: "unitPrice",
-      header: "Price",
-      meta: { numeric: true },
-      cell: ({ row }) => money2(row.original.unitPrice),
-    },
-    {
-      id: "compareAt",
-      header: "Compare At",
-      meta: { numeric: true, className: "muted" },
-      accessorFn: (p) => p.compareAtPrice ?? 0,
-      cell: ({ row }) => {
-        const cap = row.original.compareAtPrice;
-        return cap ? (
-          <span style={{ textDecoration: "line-through" }}>{money2(cap)}</span>
-        ) : (
-          "—"
-        );
-      },
-    },
-    {
-      accessorKey: "currency",
-      header: "Currency",
-      meta: { className: "muted col-tight" },
-    },
-  ];
+  const groups = groupByProduct(filtered);
+  const allGroups = groupByProduct(products);
 
   if (isLoading) {
     return (
@@ -119,11 +87,66 @@ export function AdminProducts() {
         <PanelHead>
           <h3>Products</h3>
           <span className="t-meta">
-            {list.length} of {products.length} products
+            {allGroups.length} product{allGroups.length === 1 ? "" : "s"},{" "}
+            {products.length} variant{products.length === 1 ? "" : "s"}
           </span>
         </PanelHead>
-        {list.length ? (
-          <DataTable columns={columns} data={list} enableSorting />
+        {groups.length ? (
+          <div className="product-groups">
+            {groups.map((group) => (
+              <div key={group.productId} className="product-group">
+                <div className="product-group-header">
+                  <strong>{group.name}</strong>
+                  <span className="t-meta">
+                    {group.variants.length} variant{group.variants.length === 1 ? "" : "s"}
+                  </span>
+                </div>
+                <table className="product-variants-table">
+                  <thead>
+                    <tr>
+                      <th>Variant</th>
+                      <th>Unit</th>
+                      <th style={{ textAlign: "right" }}>Price</th>
+                      <th style={{ textAlign: "right" }}>Compare At</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {group.variants.map((v) => (
+                      <tr key={v.id}>
+                        <td>
+                          <span style={{ fontWeight: 500 }}>
+                            {v.priceLabel || v.description || v.name}
+                          </span>
+                          {v.priceLabel && v.description && v.description !== v.priceLabel ? (
+                            <div className="t-meta">
+                              {v.description.length > 60
+                                ? `${v.description.slice(0, 60)}…`
+                                : v.description}
+                            </div>
+                          ) : null}
+                        </td>
+                        <td>
+                          <Pill className="pill-outline">{v.unit}</Pill>
+                        </td>
+                        <td style={{ textAlign: "right", fontWeight: 600 }}>
+                          {money2(v.unitPrice)}
+                        </td>
+                        <td style={{ textAlign: "right" }} className="muted">
+                          {v.compareAtPrice ? (
+                            <span style={{ textDecoration: "line-through" }}>
+                              {money2(v.compareAtPrice)}
+                            </span>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))}
+          </div>
         ) : (
           <PanelBody>
             <EmptyState title="Nothing found" message="No product matches that search." />

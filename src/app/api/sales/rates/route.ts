@@ -7,12 +7,20 @@ import { requireAdmin } from "@/lib/auth/require-admin";
 import { readRates, writeRates } from "@/lib/sales/rates.server";
 
 const percent = z.coerce.number().min(0, "Can't be negative.").max(100, "Can't be over 100%.");
+const positive = z.coerce.number().min(0, "Can't be negative.");
+
+const CommissionTierSchema = z.object({
+  maxDiscountPercent: z.number().min(0).max(100).nullable(),
+  commissionPercent: percent,
+});
 
 const RatesSchema = z
   .object({
     defaultCommissionPercent: percent,
     marginPercent: percent,
     repCommissionPercent: z.record(z.string(), percent),
+    appointmentFee: positive,
+    commissionTiers: z.array(CommissionTierSchema),
   })
   .strict();
 
