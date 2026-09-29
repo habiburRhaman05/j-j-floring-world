@@ -4,7 +4,6 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { RoleGuard } from "@/components/providers/session-provider";
 import { activeNavKey, activeNavLabel, type NavEntry } from "@/lib/navigation";
-import { AccountButton } from "./account-button";
 import { cn } from "@/lib/utils";
 import type { Role } from "@/lib/types";
 import { AppBar } from "./app-bar";
@@ -90,12 +89,7 @@ function Shell({
             ariaLabel={ariaLabel}
             items={items}
             active={active}
-            extras={
-              <>
-                {headerExtras}
-                <AccountButton />
-              </>
-            }
+            extras={headerExtras}
           />
         ) : (
           <AppBar role={role} title={activeNavLabel(pathname, items)} solo extras={headerExtras} />

@@ -8,8 +8,8 @@ import { setupFailure } from "@/lib/setup/route-helpers";
 const VerifySchema = z
   .object({
     setupKey: z.string().min(1, "Enter the setup key."),
-    token: z.string().trim().min(10, "Paste the GHL Private Integration token."),
-    locationId: z.string().trim().min(5, "Enter the GHL Location ID."),
+    token: z.string().trim().min(10, "Paste the Private Integration token."),
+    locationId: z.string().trim().min(5, "Enter the Location ID."),
   })
   .strict();
 

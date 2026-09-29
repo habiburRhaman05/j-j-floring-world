@@ -8,7 +8,7 @@ export default function CsrIntakePage() {
     <ViewSection
       viewKey="intake"
       heading="Intake board"
-      sub="Live from GoHighLevel: every pipeline, and every contact tagged fb-lead."
+      sub="Every pipeline, and every contact tagged fb-lead."
     >
       <CsrIntake />
     </ViewSection>

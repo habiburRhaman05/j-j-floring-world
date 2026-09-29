@@ -132,7 +132,7 @@ export async function verifyGhlCredentials(credential: SetupCredential): Promise
     location = await getLocation(connection);
   } catch (error) {
     const detail = error instanceof Error ? error.message : "";
-    const status = /GHL (401|403) /.test(detail) ? "The token was rejected" : "The location could not be read";
+    const status = /CRM (401|403) /.test(detail) ? "The token was rejected" : "The location could not be read";
     throw new SetupError(
       `${status}. Check the PIT token has the locations, users and contacts scopes, and the Location ID is the sub-account's.`,
       422,
@@ -145,7 +145,7 @@ export async function verifyGhlCredentials(credential: SetupCredential): Promise
     raw = await listLocationUsers(connection);
   } catch {
     throw new SetupError(
-      "Connected, but GoHighLevel refused to list users. Add the users.readonly scope to the PIT token.",
+      "Connected, but the account refused to list users. Add the users.readonly scope to the PIT token.",
       422,
       "ghl_users_scope",
     );
@@ -227,7 +227,7 @@ export async function completeSetup(
   }
   const missingEmail = picked.find((p) => !p.user.email);
   if (missingEmail) {
-    throw new SetupError(`${missingEmail.user.name} has no email in GoHighLevel, so they cannot sign in.`, 422, "missing_email");
+    throw new SetupError(`${missingEmail.user.name} has no email on their account record, so they cannot sign in.`, 422, "missing_email");
   }
   const emails = new Set<string>();
   for (const p of picked) {

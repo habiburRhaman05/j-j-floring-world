@@ -25,8 +25,7 @@ import {
 } from "@/lib/sales/metrics";
 import type { SalesBoardResponse, SalesOpportunity } from "@/lib/sales/types";
 
-/* ==========================================================================
-   sales-dashboard.tsx  -  GHL "Sales Pipeline", admin (everyone) or rep (own)
+/* ==========================================================================    sales-dashboard.tsx  -  the sales pipeline board, admin (everyone) or rep (own)
    --------------------------------------------------------------------------
    Filters: date range (drives every number), rep (admin), contact search
    (name/phone/email, drives everything), card status (board only - the
@@ -188,7 +187,7 @@ export function SalesDashboard({ scope }: { scope: "all" | "own" }) {
             loading={board.isFetching}
             onClick={() => void board.refetch()}
           >
-            Refresh from GoHighLevel
+            Refresh
           </Button>
         </div>
       </div>
@@ -338,7 +337,7 @@ export function SalesDashboard({ scope }: { scope: "all" | "own" }) {
         <div>
           <h3 style={{ margin: 0 }}>{isAdmin ? data.pipeline.name : `My ${data.pipeline.name.toLowerCase()}`}</h3>
           <div className="t-meta">
-            Live from GoHighLevel. Drag a card to change its stage; it is saved to GoHighLevel.
+            Live. Drag a card to change its stage; it is saved as you drop it.
           </div>
         </div>
         <Select
@@ -404,7 +403,7 @@ export function SalesDashboard({ scope }: { scope: "all" | "own" }) {
           <div>
             <h3>{isAdmin ? "Assigned contacts without an opportunity" : "My contacts without an opportunity"}</h3>
             <div className="t-meta">
-              Assigned to {isAdmin ? "a rep" : "you"} in GoHighLevel but not in the {data.pipeline.name} yet.
+              Assigned to {isAdmin ? "a rep" : "you"} but not in the {data.pipeline.name} yet.
             </div>
           </div>
           <span className="t-meta">{contacts.length}</span>
@@ -457,7 +456,7 @@ export function SalesDashboard({ scope }: { scope: "all" | "own" }) {
         <div style={{ marginTop: 16 }}>
           <EmptyState
             title="No opportunities yet"
-            message={`GoHighLevel's ${data.pipeline.name} has no ${isAdmin ? "" : "assigned "}opportunities right now.`}
+            message={`The ${data.pipeline.name} has no ${isAdmin ? "" : "assigned "}opportunities right now.`}
           />
         </div>
       ) : null}
@@ -518,7 +517,7 @@ function RatesPanel({ data }: { data: SalesBoardResponse }) {
         <div>
           <h3>Commission and margin</h3>
           <div className="t-meta">
-            Commission is a percent of each won deal&apos;s value. GoHighLevel stores only the
+            Commission is a percent of each won deal&apos;s value. The pipeline stores only the
             sale value, so margin uses your average gross margin.
           </div>
         </div>

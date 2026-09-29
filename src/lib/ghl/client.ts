@@ -78,7 +78,7 @@ export async function saveGhlLeadConfig(leadPipelineId: string, leadTag: string)
 /** GET /locations/:id with the stored bearer token. Never throws; reports success/failure. */
 export async function verifyConnection(): Promise<{ ok: boolean; error?: string }> {
   const connection = await getGhlConnection();
-  if (!connection) return { ok: false, error: "No GoHighLevel connection is saved yet." };
+  if (!connection) return { ok: false, error: "No connection is saved yet." };
 
   try {
     const response = await fetch(`${GHL_API_BASE}/locations/${connection.locationId}`, {
@@ -92,7 +92,7 @@ export async function verifyConnection(): Promise<{ ok: boolean; error?: string 
 
     if (!response.ok) {
       const body = await response.text().catch(() => "");
-      return { ok: false, error: `GHL returned ${response.status}: ${body.slice(0, 300)}` };
+      return { ok: false, error: `The connected account returned ${response.status}: ${body.slice(0, 300)}` };
     }
 
     await prisma.integrationCredential.update({
@@ -101,7 +101,7 @@ export async function verifyConnection(): Promise<{ ok: boolean; error?: string 
     });
     return { ok: true };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error contacting GHL.";
+    const message = error instanceof Error ? error.message : "Unknown error contacting the connected account.";
     await prisma.integrationCredential
       .update({ where: { provider: PROVIDER }, data: { lastVerifyError: message } })
       .catch(() => {});
@@ -117,7 +117,7 @@ export async function verifyConnection(): Promise<{ ok: boolean; error?: string 
 export async function uploadMedia(file: Blob, filename: string): Promise<{ url: string; id: string }> {
   const connection = await getGhlConnection();
   if (!connection) {
-    throw new Error("Connect GoHighLevel in Settings before uploading files.");
+    throw new Error("Connect the account in Settings before uploading files.");
   }
 
   const form = new FormData();
@@ -134,14 +134,14 @@ export async function uploadMedia(file: Blob, filename: string): Promise<{ url: 
 
   if (!response.ok) {
     const body = await response.text().catch(() => "");
-    throw new Error(`GHL media upload failed (${response.status}): ${body.slice(0, 300)}`);
+    throw new Error(`CRM media upload failed (${response.status}): ${body.slice(0, 300)}`);
   }
 
   const data = (await response.json()) as { url?: string; fileId?: string; id?: string };
   const url = data.url;
   const id = data.fileId ?? data.id;
   if (!url || !id) {
-    throw new Error("GHL media upload returned an unexpected response shape.");
+    throw new Error("The media upload returned an unexpected response shape.");
   }
   return { url, id };
 }
@@ -180,7 +180,7 @@ export async function ghlFetch<T>(connection: GhlConnection, path: string, init?
   });
   if (!response.ok) {
     const body = await response.text().catch(() => "");
-    throw new Error(`GHL ${response.status} on ${path}: ${body.slice(0, 400)}`);
+    throw new Error(`CRM ${response.status} on ${path}: ${body.slice(0, 400)}`);
   }
   return response.json() as Promise<T>;
 }
@@ -224,7 +224,7 @@ export async function getOpportunity(connection: GhlConnection, opportunityId: s
     );
     return data.opportunity ?? null;
   } catch (error) {
-    if (error instanceof Error && /GHL (400|404|422) /.test(error.message)) return null;
+    if (error instanceof Error && /CRM (400|404|422) /.test(error.message)) return null;
     throw error;
   }
 }
@@ -335,7 +335,7 @@ export async function getContact(connection: GhlConnection, contactId: string): 
     const data = await ghlFetch<{ contact?: GhlContact }>(connection, `/contacts/${encodeURIComponent(contactId)}`);
     return data.contact ?? null;
   } catch (error) {
-    if (error instanceof Error && /GHL (400|404|422) /.test(error.message)) return null;
+    if (error instanceof Error && /CRM (400|404|422) /.test(error.message)) return null;
     throw error;
   }
 }
@@ -468,7 +468,7 @@ export async function getLocation(connection: GhlConnection): Promise<GhlLocatio
   const data = await ghlFetch<{
     location?: { id: string; name?: string; companyId?: string; email?: string };
   }>(connection, `/locations/${encodeURIComponent(connection.locationId)}`);
-  if (!data.location?.id) throw new Error("GoHighLevel did not return that location.");
+  if (!data.location?.id) throw new Error("The connected account did not return that location.");
   return {
     id: data.location.id,
     name: data.location.name ?? data.location.id,
@@ -525,7 +525,7 @@ export async function getGhlUser(connection: GhlConnection, userId: string): Pro
     );
     return data.user ?? (data.id ? data : null);
   } catch (error) {
-    if (error instanceof Error && /GHL (400|404|422) /.test(error.message)) return null;
+    if (error instanceof Error && /CRM (400|404|422) /.test(error.message)) return null;
     throw error;
   }
 }
@@ -568,7 +568,7 @@ export async function createContactCustomField(
     `/locations/${encodeURIComponent(connection.locationId)}/customFields`,
     { method: "POST", body: JSON.stringify({ ...field, model: "contact" }) },
   );
-  if (!data.customField) throw new Error(`GoHighLevel did not create the "${field.name}" field.`);
+  if (!data.customField) throw new Error(`The connected account did not create the "${field.name}" field.`);
   return data.customField;
 }
 

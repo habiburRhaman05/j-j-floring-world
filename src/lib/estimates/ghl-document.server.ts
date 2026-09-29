@@ -118,9 +118,9 @@ export async function ensureEstimateFields(connection: GhlConnection): Promise<M
         field = await createContactCustomField(connection, { name: spec.name, dataType: spec.type });
       } catch (error) {
         const detail = error instanceof Error ? error.message : "";
-        if (/GHL (401|403) /.test(detail)) {
+        if (/CRM (401|403) /.test(detail)) {
           throw new EstimateDocumentError(
-            "The GoHighLevel token can't create custom fields. Add the locations/customFields.write scope to the Private Integration token.",
+            "The connected token can't create custom fields. Add the locations/customFields.write scope to the Private Integration token.",
             502,
             "ghl_scope_custom_fields",
           );
@@ -282,10 +282,10 @@ export function emailBlockReason(contact: {
   dnd?: boolean;
   dndSettings?: Record<string, { status?: string } | undefined>;
 }): string | null {
-  if (!contact.email?.trim()) return "This customer has no email address in GoHighLevel.";
+  if (!contact.email?.trim()) return "This customer has no email address on file.";
   const email = contact.dndSettings?.Email?.status?.toLowerCase();
   const optedOut = email ? email === "active" || email === "permanent" : contact.dnd === true;
-  return optedOut ? "This customer has opted out of email in GoHighLevel (Do Not Disturb), so it can't be sent." : null;
+  return optedOut ? "This customer has opted out of email (Do Not Disturb), so it can't be sent." : null;
 }
 
 /** Finds the saved template to send. Read-only. */
@@ -294,9 +294,9 @@ export async function findEstimateTemplate(connection: GhlConnection): Promise<{
   try {
     templates = await listProposalTemplates(connection);
   } catch (error) {
-    if (error instanceof Error && /GHL (401|403) /.test(error.message)) {
+    if (error instanceof Error && /CRM (401|403) /.test(error.message)) {
       throw new EstimateDocumentError(
-        "The GoHighLevel token can't read Documents & Contracts templates. Add the documents_contracts_template/list.readonly scope.",
+        "The connected token can't read Documents & Contracts templates. Add the documents_contracts_template/list.readonly scope.",
         502,
         "ghl_scope_templates",
       );
@@ -307,7 +307,7 @@ export async function findEstimateTemplate(connection: GhlConnection): Promise<{
   const template = templates.find((t) => norm(t.name) === wanted && (!t.type || t.type === "proposal"));
   if (!template) {
     throw new EstimateDocumentError(
-      `GoHighLevel has no Documents & Contracts template named "${ESTIMATE_TEMPLATE_NAME}". Create it, or set GHL_ESTIMATE_TEMPLATE_NAME.`,
+      `There is no Documents & Contracts template named "${ESTIMATE_TEMPLATE_NAME}" on the connected account. Create it, or set GHL_ESTIMATE_TEMPLATE_NAME.`,
       404,
       "ghl_template_missing",
     );

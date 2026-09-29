@@ -35,11 +35,11 @@ export class GhlNotConfiguredError extends Error {
 export async function resolveConnection(): Promise<GhlConnection> {
   const connection = await getGhlConnection();
   if (!connection) {
-    throw new GhlNotConfiguredError("Connect GoHighLevel in Admin -> Sync & Settings first.");
+    throw new GhlNotConfiguredError("Connect your account in Admin -> Sync & Settings first.");
   }
   if (!connection.leadPipelineId) {
     throw new GhlNotConfiguredError(
-      "No lead pipeline set. Open Admin -> Sync & Settings and paste the Pipeline ID (from GHL: Opportunities -> Pipelines).",
+      "No lead pipeline set. Open Admin -> Sync & Settings and paste the Pipeline ID (from Opportunities -> Pipelines).",
     );
   }
   return connection;
@@ -100,7 +100,7 @@ export async function fetchLiveLeads(connection: GhlConnection): Promise<LiveLea
 
   const pipeline = pipelines.find((p) => p.id === pipelineId);
   if (!pipeline) {
-    throw new Error(`Pipeline ${pipelineId} was not found on this GHL location.`);
+    throw new Error(`Pipeline ${pipelineId} was not found on this location.`);
   }
 
   const stageNameById = new Map(pipeline.stages.map((s) => [s.id, s.name] as const));
@@ -147,7 +147,7 @@ export async function pushStageChange(
   const { pipeline } = await fetchLiveLeads(connection); // cheap enough for today's volume; caches nothing
   const target = pipeline.stages.find((s) => s.name.toLowerCase() === stage.toLowerCase());
   if (!target) {
-    throw new Error(`GHL pipeline "${pipeline.name}" has no stage named "${stage}".`);
+    throw new Error(`The pipeline "${pipeline.name}" has no stage named "${stage}".`);
   }
   await updateOpportunityStage(connection, opportunityId, target.id);
 }
@@ -161,7 +161,7 @@ export async function pushNewLead(
     pipeline: (await listPipelines(connection)).find((p) => p.id === pipelineId)!,
   }));
   const firstStage = pipeline.stages.find((s) => s.name.toLowerCase() === "new lead") ?? pipeline.stages[0];
-  if (!firstStage) throw new Error(`GHL pipeline "${pipeline.name}" has no stages.`);
+  if (!firstStage) throw new Error(`The pipeline "${pipeline.name}" has no stages.`);
 
   const { contactId, opportunityId } = await createContactAndOpportunity(connection, {
     ...input,

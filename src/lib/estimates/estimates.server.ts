@@ -252,7 +252,7 @@ async function resolveCustomer(
   ]);
   if (!contact)
     throw new EstimateError(
-      "That customer no longer exists in GoHighLevel.",
+      "That customer no longer exists in the customer records.",
       404,
       "customer_missing",
     );
@@ -263,7 +263,7 @@ async function resolveCustomer(
     const visible = opps.some((o) => repCanSee(o, contact.assignedTo, viewer.ghlUserId));
     if (!visible) {
       throw new EstimateError(
-        "That customer is not assigned to you in GoHighLevel.",
+        "That customer is not assigned to you in the pipeline.",
         403,
         "forbidden",
       );
@@ -620,6 +620,6 @@ export async function bestEffort(
     return null;
   } catch (error) {
     console.error(`[estimates] GHL ${label} failed:`, error);
-    return `Saved, but GoHighLevel was not updated (${label}).`;
+    return `Saved, but the pipeline was not updated (${label}).`;
   }
 }

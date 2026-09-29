@@ -108,7 +108,7 @@ async function ghlInvoiceFetch<T>(connection: GhlConnection, path: string, init?
   });
   if (!response.ok) {
     const body = await response.text().catch(() => "");
-    throw new Error(`GHL Invoice API ${response.status}: ${body.slice(0, 400)}`);
+    throw new Error(`Invoice API ${response.status}: ${body.slice(0, 400)}`);
   }
   return response.json() as Promise<T>;
 }
@@ -119,7 +119,7 @@ function extractInvoice(raw: Record<string, unknown>): GhlInvoiceResponse {
   const inv = (raw.invoice ?? raw.data ?? raw) as GhlInvoiceResponse;
   if (!inv._id && !inv.invoiceNumber) {
     console.error("[invoice] Unexpected GHL response shape:", JSON.stringify(raw).slice(0, 500));
-    throw new Error(`GHL returned unexpected response (no _id or invoiceNumber). Keys: ${Object.keys(raw).join(", ")}`);
+    throw new Error(`The invoice service returned an unexpected response (no _id or invoiceNumber). Keys: ${Object.keys(raw).join(", ")}`);
   }
   return inv;
 }
@@ -376,7 +376,7 @@ export async function createAndSendInvoice(
     }
     throw new InvoiceError(
       422,
-      `Invoice total mismatch: expected ${expectedTotal}, GHL returned ${fetched.total}. Draft deleted.`,
+      `Invoice total mismatch: expected ${expectedTotal}, the invoice service returned ${fetched.total}. Draft deleted.`,
     );
   }
 
@@ -399,7 +399,7 @@ export async function createAndSendInvoice(
     sendUserId = anyUser?.ghlUserId ?? null;
   }
   if (!sendUserId) {
-    throw new InvoiceError(400, "No GHL user ID found. Cannot send invoice. Ensure sales reps have GHL accounts linked.");
+    throw new InvoiceError(400, "No sender account found. Cannot send invoice. Ensure sales reps have linked accounts.");
   }
 
   // ── Send the invoice ────────────────────────────────────────────────

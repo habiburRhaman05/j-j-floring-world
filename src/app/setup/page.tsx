@@ -49,7 +49,7 @@ const STAFF_ROLES: AppRoleKey[] = ["csr", "sales_rep", "installer"];
 function ghlRoleLabel(ghlRole: string): string {
   const [type, role] = ghlRole.split(":");
   const level =
-    type === "agency" ? "Agency" : type === "account" ? "Sub-account" : "GHL";
+    type === "agency" ? "Agency" : type === "account" ? "Sub-account" : "Account";
   return `${level} ${role === "admin" ? "admin" : role === "user" ? "user" : (role ?? "")}`.trim();
 }
 
@@ -183,8 +183,8 @@ export default function SetupPage() {
             <>
               <h1>Setup is already complete</h1>
               <p className="lede">
-                This app is connected to GoHighLevel and its users have been
-                created. Admins manage users and roles from the Team page.
+                This app is connected and its users have been created. Admins
+                manage users and roles from the Team page.
               </p>
               <Button asChild variant="primary">
                 <Link href="/login">Go to sign in</Link>
@@ -203,7 +203,7 @@ export default function SetupPage() {
             <SetupDone result={result} onCopyAll={copyAll} />
           ) : !verified ? (
             <>
-              <h1>Connect GoHighLevel</h1>
+              <h1>Connect your workspace</h1>
               <p className="lede">
                 Use a Private Integration token from the sub-account (Settings,
                 Private Integrations) with the locations, users, contacts and
@@ -229,7 +229,7 @@ export default function SetupPage() {
                     </span>
                   ) : null}
                 </Field>
-                <Field label="GHL Private Integration token">
+                <Field label="Private Integration token">
                   <Input
                     type="password"
                     autoComplete="off"
@@ -243,7 +243,7 @@ export default function SetupPage() {
                     </span>
                   ) : null}
                 </Field>
-                <Field label="GHL Location ID (sub-account)">
+                <Field label="Location ID (sub-account)">
                   <Input
                     autoComplete="off"
                     value={locationId}
@@ -263,7 +263,7 @@ export default function SetupPage() {
                   loading={verifying}
                 >
                   {verifying
-                    ? "Checking with GoHighLevel…"
+                    ? "Checking the connection…"
                     : "Verify and load users"}
                 </Button>
               </form>
@@ -296,7 +296,7 @@ export default function SetupPage() {
                   style={{ marginBottom: 14 }}
                 >
                   <span>
-                    The agency owner could not be identified from GoHighLevel,
+                    The agency owner could not be identified from the account,
                     so pick who should be the Admin below.
                   </span>
                 </div>
@@ -304,7 +304,7 @@ export default function SetupPage() {
 
               {verified.users.length === 0 ? (
                 <div className="login-alert" role="alert">
-                  GoHighLevel returned no sub-account users for this location.
+                  No sub-account users were returned for this location.
                 </div>
               ) : (
                 <TableWrap>
@@ -313,7 +313,7 @@ export default function SetupPage() {
                       <Tr>
                         <Th>Name</Th>
                         <Th>Email</Th>
-                        <Th>GHL role</Th>
+                        <Th>Account role</Th>
                         <Th>App role</Th>
                       </Tr>
                     </THead>
@@ -508,7 +508,7 @@ function SetupDone({
       </div>
 
       <div style={{ marginTop: 22 }}>
-        <div className="label">GHL custom menu links (auto-login)</div>
+        <div className="label">Custom menu links (auto-login)</div>
         <ul
           className="t-meta"
           style={{ margin: "6px 0 0", paddingLeft: 18, lineHeight: 1.8 }}

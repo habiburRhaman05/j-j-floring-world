@@ -30,7 +30,7 @@ export const PATCH = apiRoute(async (request: NextRequest, { params }: { params:
   try {
     await pushStageChange(connection, decodeURIComponent(id), parsed.data.stage);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error reaching GoHighLevel.";
+    const message = error instanceof Error ? error.message : "Unknown error reaching the connected account.";
     return errorResponse(502, message, { code: "ghl_request_failed" });
   }
 

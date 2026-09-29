@@ -18,8 +18,8 @@ interface EstimateDetailProps {
 /**
  * A read-only view of an estimate and where it stands. It carries no
  * signature box and no approve button on purpose: an estimate is approved
- * only when the customer signs the document GoHighLevel emailed them, and
- * the app learns of it from GoHighLevel. Price only - cost is never
+ * only when the customer signs the document emailed to them, and
+ * the app learns of it from the connected account. Price only - cost is never
  * rendered, even for an Admin.
  */
 export function EstimateDetail({ open, onOpenChange, db, estimateId }: EstimateDetailProps) {
@@ -52,7 +52,7 @@ export function EstimateDetail({ open, onOpenChange, db, estimateId }: EstimateD
           </span>
         ) : (
           <span className="t-meta">
-            GoHighLevel emailed {customer}
+            The document was emailed to {customer}
             {email ? ` (${email})` : ""} the {estimate.sentTier ?? "estimate"} package to sign. It is approved
             as soon as they sign it.
           </span>

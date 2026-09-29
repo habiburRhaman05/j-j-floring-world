@@ -32,7 +32,7 @@ const DEFAULT_PIPELINE_NAME = "lead-qualify";
 export async function requireConnection(): Promise<GhlConnection> {
   const connection = await getGhlConnection();
   if (!connection) {
-    throw new GhlNotConfiguredError("Connect GoHighLevel in Admin -> Sync & Settings first.");
+    throw new GhlNotConfiguredError("Connect your account in Admin -> Sync & Settings first.");
   }
   return connection;
 }

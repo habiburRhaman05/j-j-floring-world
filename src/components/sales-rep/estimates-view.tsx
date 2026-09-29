@@ -36,7 +36,7 @@ export function RepEstimates({ db, meId }: { db: Database; meId: string }) {
     try {
       const { changed } = await apiPost<{ changed: number }>(endpoints.estimates.sync);
       await invalidate();
-      toast(changed ? `${changed} estimate${changed === 1 ? "" : "s"} updated from GoHighLevel.` : "No new signatures yet.", changed ? "ok" : undefined);
+      toast(changed ? `${changed} estimate${changed === 1 ? "" : "s"} updated.` : "No new signatures yet.", changed ? "ok" : undefined);
     } catch (error) {
       toast(toApiError(error).displayMessage, "warn", 4600);
     } finally {

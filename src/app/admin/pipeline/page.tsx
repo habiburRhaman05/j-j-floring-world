@@ -8,7 +8,7 @@ export default function AdminPipelinePage() {
     <ViewSection
       viewKey="pipeline"
       heading="Sales pipeline"
-      sub="Live from GoHighLevel's Sales Pipeline: every rep, every deal, with win rate, commission and margin."
+      sub="Live from the sales pipeline: every rep, every deal, with win rate, commission and margin."
     >
       <SalesDashboard scope="all" />
     </ViewSection>

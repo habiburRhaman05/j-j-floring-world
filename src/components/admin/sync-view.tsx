@@ -26,7 +26,7 @@ export function AdminSync({ db }: { db: Database }) {
           <div>
             <h3>Sync Activity Log</h3>
             <div className="t-meta">
-              Stubbed GoHighLevel integration. No network calls are made.
+              Sync activity between this app and your connected account.
             </div>
           </div>
           <Button
@@ -88,7 +88,7 @@ export function AdminSync({ db }: { db: Database }) {
                 });
               }}
             >
-              Simulate inbound GHL event
+              Simulate inbound event
             </Button>
             <span className="t-meta">Data: in-memory store (frontend build)</span>
           </div>

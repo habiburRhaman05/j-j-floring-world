@@ -25,7 +25,7 @@ export const GET = apiRoute(async () => {
 
   const connection = await getGhlConnection();
   if (!connection) {
-    return errorResponse(409, "Connect GoHighLevel first (Admin > Sync & Settings).", {
+    return errorResponse(409, "Connect your account first (Admin > Sync & Settings).", {
       code: "ghl_not_configured",
     });
   }

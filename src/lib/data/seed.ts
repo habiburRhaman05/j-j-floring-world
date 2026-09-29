@@ -411,10 +411,10 @@ function seedInvoices(db: Database): Invoice[] {
 
 function seedSyncLog(): SyncEntry[] {
   const rows: Array<[number, "in" | "out", string, string]> = [
-    [12, "out", "opportunity.stage", "App → GHL: Opportunity 'Eleanor Whitcomb' moved to 'Won'"],
-    [10, "out", "job.created", "App → GHL: Job created for 'Darnell Pierce', pipeline 'Installation'"],
-    [9, "in", "contact.updated", "GHL → App: Contact 'Tomas Vidal' phone updated"],
-    [4, "out", "job.stage", "App → GHL: Job 'Sofia Martinelli' moved to 'Completed'"],
+    [12, "out", "opportunity.stage", "App → Sync: Opportunity 'Eleanor Whitcomb' moved to 'Won'"],
+    [10, "out", "job.created", "App → Sync: Job created for 'Darnell Pierce', pipeline 'Installation'"],
+    [9, "in", "contact.updated", "Sync → App: Contact 'Tomas Vidal' phone updated"],
+    [4, "out", "job.stage", "App → Sync: Job 'Sofia Martinelli' moved to 'Completed'"],
   ];
   return rows.map(([ago, dir, event, message]) => ({
     id: uid("sync"),

@@ -34,7 +34,7 @@ export const POST = apiRoute(async (request: NextRequest) => {
     uploaded = await uploadMedia(file, filename);
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : "Could not upload the image to GoHighLevel.";
+      error instanceof Error ? error.message : "Could not upload the image to the connected account.";
     return errorResponse(422, message, { code: "ghl_upload_failed" });
   }
 

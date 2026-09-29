@@ -24,7 +24,7 @@ export const POST = apiRoute(async (request: NextRequest) => {
   });
 
   if (!result.ok) {
-    return errorResponse(422, result.error ?? "Could not verify the GoHighLevel connection.", {
+    return errorResponse(422, result.error ?? "Could not verify the connection.", {
       code: "ghl_verify_failed",
     });
   }

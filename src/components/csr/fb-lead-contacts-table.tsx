@@ -17,8 +17,8 @@ interface FbLeadContactsTableProps {
 }
 
 /**
- * Every GHL contact carrying the fb-lead tag, read live from GHL each time the
- * dashboard loads. GHL's own workflow tags new Facebook leads and moves them
+ * Every contact carrying the fb-lead tag, read live each time the
+ * dashboard loads. The connected workflow tags new Facebook leads and moves them
  * into lead-qualify, so this table is a straight mirror of that tag; the last
  * column says where each contact sits on the board above.
  */
@@ -32,7 +32,7 @@ export function FbLeadContactsTable({ pipelineName, stageByContactId }: FbLeadCo
         <div>
           <h3>{query.data?.tag ?? "fb-lead"} contacts</h3>
           <div className="t-meta">
-            Every contact in GoHighLevel tagged {query.data?.tag ?? "fb-lead"}
+            Every contact tagged {query.data?.tag ?? "fb-lead"}
             {query.data ? `, ${contacts.length} in total` : ""}.
           </div>
         </div>

@@ -12,7 +12,7 @@ export default function AdminSyncPage() {
     <ViewSection
       viewKey="sync"
       heading="Sync and settings"
-      sub="Connect GoHighLevel, then watch what moves between the two systems."
+      sub="Connect your account, then watch what moves between the two systems."
     >
       <GhlConnectionPanel />
       <AdminSync db={db} />

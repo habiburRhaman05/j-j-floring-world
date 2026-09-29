@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
       const conn = await getGhlConnection();
       if (!conn) {
         return NextResponse.json(
-          { error: "GHL not configured" },
+          { error: "Integration not configured" },
           { status: 503 },
         );
       }

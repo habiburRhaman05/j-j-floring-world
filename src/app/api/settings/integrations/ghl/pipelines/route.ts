@@ -11,7 +11,7 @@ export const GET = apiRoute(async () => {
 
   const connection = await getGhlConnection();
   if (!connection) {
-    return errorResponse(409, "Connect GoHighLevel (Location ID + token) above first.", {
+    return errorResponse(409, "Connect the account (Location ID + token) above first.", {
       code: "ghl_not_configured",
     });
   }
@@ -26,7 +26,7 @@ export const GET = apiRoute(async () => {
       })),
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error reaching GoHighLevel.";
+    const message = error instanceof Error ? error.message : "Unknown error reaching the connected account.";
     return errorResponse(502, message, { code: "ghl_request_failed" });
   }
 });

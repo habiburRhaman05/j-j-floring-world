@@ -33,7 +33,7 @@ export async function withCsrConnection(): Promise<
  * so internals never reach the screen.
  */
 export function ghlFailure(error: unknown): NextResponse {
-  if (error instanceof Error && /^GHL \d{3} /.test(error.message)) {
+  if (error instanceof Error && /^CRM \d{3} /.test(error.message)) {
     return errorResponse(502, error.message, { code: "ghl_request_failed" });
   }
   throw error;

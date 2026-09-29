@@ -21,7 +21,7 @@ import { relative } from "@/lib/format";
    team-view.tsx  -  real, database-backed team roster
    --------------------------------------------------------------------------
    Talks to /api/users (list, edit, suspend/reactivate), not the mock
-   dataset. Team members come from GoHighLevel through first-run setup, so
+   dataset. Team members are imported through first-run setup, so
    there is no invite or remove here. One role per user;
    the full multi-role permission vault (doc 04) is a later pass once fields
    that actually need it are built.
@@ -47,7 +47,7 @@ interface TeamUser {
   lastName: string;
   status: string;
   lastLoginAt: string | null;
-  /** "account:admin" / "account:user", or null for a user not imported from GHL. */
+  /** "account:admin" / "account:user", or null for a user not imported during setup. */
   ghlRole: string | null;
   roles: { id: string; key: string; name: string }[];
 }
@@ -140,7 +140,7 @@ export function AdminTeam() {
     },
     {
       id: "ghlRole",
-      header: "GHL role",
+      header: "Account role",
       meta: { className: "col-tight muted" },
       cell: ({ row }) => {
         const ghl = row.original.ghlRole;

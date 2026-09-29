@@ -18,7 +18,7 @@ export const ROLES: RoleDef[] = [
     href: "/admin",
     accent: "var(--blue)",
     label: "Admin",
-    blurb: "Full visibility. Revenue, cost, margin, products, users and the GHL sync log.",
+    blurb: "Full visibility. Revenue, cost, margin, products, users and the sync log.",
     icon: "M3 20h18M5 20V9l7-5 7 5v11M9 20v-6h6v6",
   },
   {

@@ -114,7 +114,7 @@ class MockDatabase {
    * fetch to the GHL v2 API. Every caller stays exactly as written.
    */
   private transport(direction: SyncDirection, event: string, payload?: unknown) {
-    const arrow = direction === "out" ? "App → GHL" : "GHL → App";
+    const arrow = direction === "out" ? "App → Sync" : "Sync → App";
     if (typeof console !== "undefined") {
       console.log(`[ghlSync] ${arrow} | ${event}`, payload ?? "");
     }
@@ -127,7 +127,7 @@ class MockDatabase {
     message: string,
     payload?: unknown,
   ): SyncEntry {
-    const arrow = direction === "out" ? "App → GHL: " : "GHL → App: ";
+    const arrow = direction === "out" ? "App → Sync: " : "Sync → App: ";
     const entry: SyncEntry = {
       id: uid("sync"),
       at: new Date().toISOString(),

@@ -57,7 +57,7 @@ export async function findSalesPipeline(connection: GhlConnection): Promise<GhlP
   );
   if (!pipeline) {
     throw new SalesBoardError(
-      'GoHighLevel has no pipeline named "Sales Pipeline" on this location.',
+      'There is no pipeline named "Sales Pipeline" on this location.',
       404,
       "sales_pipeline_missing",
     );
@@ -114,7 +114,7 @@ export async function fetchSalesBoard(connection: GhlConnection, viewer: Viewer)
     if (!ghlId) return { ownerUserId: null, ownerName: "Unassigned" };
     const app = appByGhl.get(ghlId);
     if (app) return { ownerUserId: app.id, ownerName: `${app.firstName} ${app.lastName}`.trim() };
-    return { ownerUserId: null, ownerName: ghlNameById.get(ghlId) ?? "Unknown GHL user" };
+    return { ownerUserId: null, ownerName: ghlNameById.get(ghlId) ?? "Unknown user" };
   };
 
   const contactAssignee = new Map(contacts.map((c) => [c.id, c.assignedTo ?? null] as const));
@@ -194,7 +194,7 @@ export async function fetchSalesBoard(connection: GhlConnection, viewer: Viewer)
         },
     notice:
       !viewer.isAdmin && !viewer.ghlUserId
-        ? "Your account is not linked to a GoHighLevel user, so no leads can be matched to you. Ask an admin."
+        ? "Your account is not linked to a pipeline user, so no leads can be matched to you. Ask an admin."
         : null,
   };
 }

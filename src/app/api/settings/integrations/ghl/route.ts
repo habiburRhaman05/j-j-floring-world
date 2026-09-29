@@ -74,5 +74,5 @@ export const PATCH = apiRoute(async (request: NextRequest) => {
     userAgent,
   });
 
-  return NextResponse.json({ message: "GoHighLevel connection saved." });
+  return NextResponse.json({ message: "Connection saved." });
 });

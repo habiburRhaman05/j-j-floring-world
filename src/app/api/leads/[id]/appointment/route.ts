@@ -12,7 +12,7 @@ export const PUT = apiRoute(async (_request: NextRequest) => {
   const gate = await requireApiUser(["admin", "csr"]);
   if (gate.error) return gate.error;
 
-  return errorResponse(501, "Appointment booking isn't wired to GHL Calendars yet.", {
+  return errorResponse(501, "Appointment booking isn't wired to Calendars yet.", {
     code: "not_implemented",
   });
 });

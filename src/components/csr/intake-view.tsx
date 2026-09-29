@@ -12,7 +12,7 @@ import type { CsrBoardOpportunity } from "@/lib/csr/types";
 import { money2 } from "@/lib/format";
 
 /**
- * The CSR dashboard, read live from GoHighLevel on every load: a select box
+ * The CSR dashboard, read live on every load: a select box
  * over all of the location's pipelines (lead-qualify first), that pipeline's
  * board with drag-and-drop stage changes, and the fb-lead contact list.
  *
@@ -102,7 +102,7 @@ export function CsrIntake() {
           ) : null}
         </div>
         <Button size="sm" variant="ghost" loading={refreshing} onClick={refresh}>
-          Refresh from GoHighLevel
+          Refresh from the pipeline
         </Button>
       </div>
 
@@ -115,7 +115,7 @@ export function CsrIntake() {
       ) : !pipeline ? (
         <EmptyState
           title="No pipelines found"
-          message="This GoHighLevel location has no pipelines yet."
+          message="This location has no pipelines yet."
         />
       ) : opportunitiesQuery.error ? (
         <div className="login-alert" role="alert">

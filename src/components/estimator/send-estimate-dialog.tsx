@@ -12,7 +12,7 @@ import type { Estimate } from "@/lib/types";
 interface SendEstimateDialogProps {
   estimate: Estimate;
   onClose: () => void;
-  /** Called once GoHighLevel has confirmed the document went out. */
+  /** Called once the send has been confirmed. */
   onSent?: () => void;
 }
 
@@ -51,8 +51,7 @@ export function SendEstimateDialog({ estimate, onClose, onSent }: SendEstimateDi
               toast("Add at least one line to a package first.", "warn");
               return false;
             }
-            if (!email) {
-              toast("This customer has no email address in GoHighLevel.", "warn");
+            if (!email) {               toast("This customer has no email address on file.", "warn");
               return false;
             }
             try {
@@ -91,14 +90,14 @@ export function SendEstimateDialog({ estimate, onClose, onSent }: SendEstimateDi
       <div className="send-note" role="note">
         {email ? (
           <>
-            GoHighLevel will email <strong>{customer?.name}</strong> at <strong>{email}</strong> a document
+            Your workspace will email <strong>{customer?.name}</strong> at <strong>{email}</strong> a document
             with {available.length === 1 ? "this package" : `all ${available.length} packages`} to review
             and sign. The estimate then shows <strong>Waiting for approval</strong> until they sign it.
           </>
         ) : (
           <>
-            This customer has <strong>no email address</strong> in GoHighLevel, so the document can&apos;t
-            be sent. Add one to the contact in GoHighLevel first.
+            This customer has <strong>no email address</strong> on file, so the document can&apos;t
+            be sent. Add one to the contact record first.
           </>
         )}
       </div>

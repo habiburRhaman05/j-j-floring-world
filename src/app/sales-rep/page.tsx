@@ -8,7 +8,7 @@ export default function SalesRepPipelinePage() {
     <ViewSection
       viewKey="pipeline"
       heading="My pipeline"
-      sub="Live from GoHighLevel: the leads, contacts and deals assigned to you, and how you're doing."
+      sub="Live leads, contacts and deals assigned to you, and how you're doing."
     >
       <SalesDashboard scope="own" />
     </ViewSection>

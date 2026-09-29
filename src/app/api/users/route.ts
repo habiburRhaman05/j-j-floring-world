@@ -43,11 +43,10 @@ export const GET = apiRoute(async () => {
 });
 
 /**
- * Invitations are switched off: every team member comes from the GoHighLevel
- * sub-account through first-run setup, so the roster always matches GHL.
+ * Invitations are switched off: every team member comes from the connected
+ * account through first-run setup, so the roster always matches it.
  */
-export const POST = apiRoute(async () =>
-  errorResponse(405, "Team members come from GoHighLevel and can't be invited here.", {
+export const POST = apiRoute(async () =>   errorResponse(405, "Team members are managed centrally and can't be invited here.", {
     code: "invite_disabled",
   }),
 );

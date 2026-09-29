@@ -38,8 +38,7 @@ import {
    Approved            the customer signed the GHL document
 
    The customer signing IS the approval. There is deliberately no staff
-   "approve" or in-app "sign" action, so an approval can only ever come from
-   the customer's own signature in GoHighLevel.
+   "approve" or in-app "sign" action, so an approval can only ever come from    the customer's own signature in the connected account.
    ========================================================================== */
 
 /**
@@ -67,18 +66,18 @@ export async function sendEstimate(connection: GhlConnection, viewer: Viewer, es
     throw new EstimateError("No packages have lines. Add at least one line before sending.", 422, "tier_empty");
   }
   if (!row.lead.ghlContactId) {
-    throw new EstimateError("This customer isn't linked to a GoHighLevel contact.", 422, "customer_unlinked");
+    throw new EstimateError("This customer isn't linked to a contact record.", 422, "customer_unlinked");
   }
   if (!viewer.ghlUserId) {
     throw new EstimateError(
-      "Your account isn't linked to a GoHighLevel user, so GoHighLevel can't send on your behalf.",
+      "Your account isn't linked to a sender profile, so documents can't be sent on your behalf.",
       422,
       "sender_unlinked",
     );
   }
 
   const contact = await getContact(connection, row.lead.ghlContactId);
-  if (!contact) throw new EstimateError("That customer no longer exists in GoHighLevel.", 404, "customer_missing");
+  if (!contact) throw new EstimateError("That customer no longer exists in the customer records.", 404, "customer_missing");
   const blocked = emailBlockReason(contact);
   if (blocked) throw new EstimateError(blocked, 422, "email_blocked");
 
@@ -103,22 +102,22 @@ export async function sendEstimate(connection: GhlConnection, viewer: Viewer, es
   } catch (error) {
     const detail = error instanceof Error ? error.message : "";
     console.error("[estimates] GHL template send failed:", error);
-    if (/GHL (401|403) /.test(detail)) {
+    if (/CRM (401|403) /.test(detail)) {
       throw new EstimateError(
-        "The GoHighLevel token can't send documents. Add the documents_contracts_template/sendLink.write scope to the Private Integration token.",
+        "The connected token can't send documents. Add the documents_contracts_template/sendLink.write scope to the Private Integration token.",
         502,
         "ghl_scope_send",
       );
     }
     throw new EstimateError(
-      "GoHighLevel refused to send the document. Nothing was sent to the customer.",
+      "The document service refused to send. Nothing was sent to the customer.",
       502,
       "ghl_send_failed",
     );
   }
   if (!sent.documentId) {
     throw new EstimateError(
-      "GoHighLevel did not confirm the document was created. Check it in GoHighLevel before resending.",
+      "The document creation was not confirmed. Check the connected account before resending.",
       502,
       "ghl_send_unconfirmed",
     );

@@ -23,7 +23,7 @@ export const GET = apiRoute(async () => {
   try {
     ({ leads, contacts } = await fetchLiveLeads(connection));
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error reaching GoHighLevel.";
+    const message = error instanceof Error ? error.message : "Unknown error reaching the connected account.";
     return errorResponse(502, message, { code: "ghl_request_failed" });
   }
   return NextResponse.json({
@@ -72,7 +72,7 @@ export const POST = apiRoute(async (request: NextRequest) => {
   try {
     leadId = await pushNewLead(connection, parsed.data);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error reaching GoHighLevel.";
+    const message = error instanceof Error ? error.message : "Unknown error reaching the connected account.";
     return errorResponse(502, message, { code: "ghl_request_failed" });
   }
 

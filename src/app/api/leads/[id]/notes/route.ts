@@ -29,7 +29,7 @@ export const POST = apiRoute(async (request: NextRequest, { params }: { params: 
   try {
     await pushNote(connection, decodeURIComponent(id), parsed.data.text);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error reaching GoHighLevel.";
+    const message = error instanceof Error ? error.message : "Unknown error reaching the connected account.";
     return errorResponse(502, message, { code: "ghl_request_failed" });
   }
 

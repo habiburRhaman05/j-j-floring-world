@@ -109,7 +109,7 @@ export function GhlConnectionPanel() {
     setSaveError(null);
     try {
       await apiPatch(endpoints.settings.ghl.save, { locationId, token });
-      toast("GoHighLevel connection saved.", "ok");
+      toast("Connection saved.", "ok");
       setToken("");
       invalidate();
     } catch (thrown) {
@@ -137,7 +137,7 @@ export function GhlConnectionPanel() {
       <Panel style={{ marginBottom: 16 }}>
         <PanelHead>
           <div>
-            <h3>GoHighLevel connection</h3>
+            <h3>CRM connection</h3>
           </div>
         </PanelHead>
         <PanelBody>
@@ -153,7 +153,7 @@ export function GhlConnectionPanel() {
     <Panel style={{ marginBottom: 16 }}>
       <PanelHead>
         <div>
-          <h3>GoHighLevel connection</h3>
+          <h3>CRM connection</h3>
           <div className="t-meta">
             {status?.connected ? (
               <>
@@ -193,7 +193,7 @@ export function GhlConnectionPanel() {
             <Input
               value={locationId}
               onChange={(e) => setLocationId(e.target.value)}
-              placeholder={status?.locationId ?? "GHL location ID"}
+              placeholder={status?.locationId ?? "Location ID"}
               required
             />
           </Field>
@@ -202,7 +202,7 @@ export function GhlConnectionPanel() {
               type="password"
               value={token}
               onChange={(e) => setToken(e.target.value)}
-              placeholder={status?.connected ? "Enter a new token to replace it" : "GHL private integration token"}
+              placeholder={status?.connected ? "Enter a new token to replace it" : "Private integration token"}
               required
             />
           </Field>
@@ -226,7 +226,7 @@ export function GhlConnectionPanel() {
       <PanelHead>
         <div>
           <h3>CSR intake pipeline</h3>
-          <div className="t-meta">Which GHL pipeline and contact tag the Intake Board reads.</div>
+          <div className="t-meta">Which pipeline and contact tag the Intake Board reads.</div>
         </div>
       </PanelHead>
       <PanelBody>
@@ -241,7 +241,7 @@ export function GhlConnectionPanel() {
               <Skeleton style={{ width: "100%", height: 38 }} />
             ) : pipelinesError ? (
               <div className="t-meta">
-                {pipelinesError instanceof Error ? pipelinesError.message : "Couldn't load pipelines from GHL."}
+                {pipelinesError instanceof Error ? pipelinesError.message : "Couldn't load pipelines."}
               </div>
             ) : (
               <Select value={leadPipelineId} onChange={(e) => setLeadPipelineId(e.target.value)} required>
@@ -254,7 +254,7 @@ export function GhlConnectionPanel() {
               </Select>
             )}
             <div className="t-meta" style={{ marginTop: 4 }}>
-              Fetched live from your connected GHL location - no typing IDs by hand.
+              Fetched live from your connected location - no typing IDs by hand.
             </div>
           </Field>
 
@@ -286,7 +286,7 @@ export function GhlConnectionPanel() {
                   ? `Found ${tagCheck.count} contact${tagCheck.count === 1 ? "" : "s"} tagged "${tagCheck.tag}"${
                       tagCheck.sample.length ? `: ${tagCheck.sample.map((s) => s.name).join(", ")}${tagCheck.count > tagCheck.sample.length ? "…" : ""}` : ""
                     }`
-                  : `No contacts in GHL currently carry the tag "${tagCheck.tag}". Facebook Lead Ads leads won't show up until they're tagged this exact way (check your GHL automation/workflow that applies the tag).`}
+                  : `No contacts currently carry the tag "${tagCheck.tag}". Facebook Lead Ads leads won't show up until they're tagged this exact way (check the automation/workflow that applies the tag).`}
               </div>
             ) : null}
           </Field>

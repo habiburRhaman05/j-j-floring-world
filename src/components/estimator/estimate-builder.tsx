@@ -486,7 +486,7 @@ export function EstimateBuilder({
                   >
                     <option value="">
                       {salesBoard.isPending
-                        ? "Loading customers from GoHighLevel…"
+                        ? "Loading customers…"
                         : candidates.length
                           ? "Select a customer"
                           : "No customers found"}
@@ -498,15 +498,14 @@ export function EstimateBuilder({
                     ))}
                   </Select>
                   {salesBoard.error ? (
-                    <span className="field-err">
-                      Couldn&apos;t load customers from GoHighLevel:{" "}
+                    <span className="field-err">                      Couldn&apos;t load customers: {""}
                       {toApiError(salesBoard.error).displayMessage}
                     </span>
                   ) : !salesBoard.isPending && candidates.length === 0 ? (
                     <span className="t-meta">
                       {isRep
-                        ? "No leads or contacts are assigned to you in GoHighLevel yet."
-                        : "The GoHighLevel Sales Pipeline has no open deals or assigned contacts yet."}
+                        ? "No leads or contacts are assigned to you yet."
+                        : "The sales pipeline has no open deals or assigned contacts yet."}
                     </span>
                   ) : null}
                 </Field>
@@ -557,7 +556,7 @@ export function EstimateBuilder({
                 <div className="t-meta" style={{ marginTop: -6 }}>
                   With an area entered, products priced by SF or YD are added at
                   that size plus the waste allowance. Check the unit on each
-                  line: GoHighLevel doesn&apos;t store one.
+                  line: the product record doesn&apos;t store one.
                 </div>
               </PanelBody>
             </Panel>
@@ -579,7 +578,7 @@ export function EstimateBuilder({
                   <div className="field grow" style={{ marginBottom: 0 }}>
                     <Input
                       type="search"
-                      placeholder="Search GoHighLevel products"
+                      placeholder="Search products"
                       value={search}
                       onChange={(event) => setSearch(event.target.value)}
                     />
@@ -605,8 +604,7 @@ export function EstimateBuilder({
                     </div>
                   ) : priceBook.error ? (
                     <div style={{ padding: 16 }}>
-                      <span className="field-err">
-                        Couldn&apos;t load products from GoHighLevel:{" "}
+                      <span className="field-err">                        Couldn&apos;t load products: {""}
                         {toApiError(priceBook.error).displayMessage}
                       </span>
                     </div>
@@ -616,8 +614,8 @@ export function EstimateBuilder({
                         title={search.trim() ? "No match" : "No products yet"}
                         message={
                           search.trim()
-                            ? "No GoHighLevel product matches that search."
-                            : "Add products in GoHighLevel under Payments, Products, then press Refresh."
+                            ? "No product matches that search."
+                            : "Add products in the price book, then press Refresh."
                         }
                       />
                     </div>
@@ -871,7 +869,7 @@ export function EstimateBuilder({
                               {line.isCustom
                                 ? "Service / custom"
                                 : line.ghlProductId
-                                  ? "GoHighLevel product"
+                                  ? "Catalog product"
                                   : (line.category ?? "Product")}
                             </span>
                             <label className="check" style={{ fontSize: 12 }}>

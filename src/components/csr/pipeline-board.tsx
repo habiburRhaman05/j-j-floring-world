@@ -166,7 +166,7 @@ export function PipelineBoard<T extends CsrBoardOpportunity>({
                           <span className="t-meta">{relative(opportunity.createdAt)}</span>
                         ) : null}
                       </div>
-                      {moving ? <span className="tile-saving-label">Saving to GoHighLevel…</span> : null}
+                      {moving ? <span className="tile-saving-label">Saving…</span> : null}
                     </div>
                   );
                 })}
@@ -269,7 +269,7 @@ function OpportunityDialog({
         <div style={{ marginTop: 14 }}>
           <Button size="sm" asChild>
             <a href={ghlUrl} target="_blank" rel="noopener noreferrer">
-              Open in GoHighLevel
+              Open in CRM
             </a>
           </Button>
         </div>

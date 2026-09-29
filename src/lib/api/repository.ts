@@ -182,7 +182,7 @@ export function createHttpRepository(): WorkspaceRepository {
     markEstimateViewed: async () => null,
     signEstimate: () =>
       Promise.reject(
-        new ApiError("An estimate is approved when the customer signs the document GoHighLevel emailed them.", {
+        new ApiError("An estimate is approved when the customer signs the document emailed to them.", {
           status: 405,
           code: "sign_disabled",
         }),
