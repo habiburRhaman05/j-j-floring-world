@@ -33,7 +33,7 @@ import type { Estimate, Tier } from "@/lib/types";
    location already carries.
    ========================================================================== */
 
-export const ESTIMATE_TEMPLATE_NAME = process.env.GHL_ESTIMATE_TEMPLATE_NAME?.trim() || "JJ_Flooring_Estimate";
+export const ESTIMATE_TEMPLATE_NAME = process.env.GHL_ESTIMATE_TEMPLATE_NAME?.trim() || "JJ_Flooring_Estimate_Pdf";
 
 const TIERS_ORDERED: Tier[] = ["Good", "Better", "Best"];
 

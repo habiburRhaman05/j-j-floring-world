@@ -41,8 +41,6 @@ export default function GhlSignInPage() {
       <main className="login-main login-narrow">
         <div className="login-card auto-login" role="status" aria-live="polite">
           <span className="auto-login-spinner" aria-hidden="true" />
-          <h1>Signing you in…</h1>
-          <p className="lede">Checking your GoHighLevel account. This takes a second.</p>
         </div>
       </main>
     </div>
