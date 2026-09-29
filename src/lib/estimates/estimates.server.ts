@@ -260,9 +260,7 @@ async function resolveCustomer(
   const opportunity = opps.find((o) => o.status === "open") ?? opps[0] ?? null;
 
   if (!viewer.isAdmin) {
-    const visible =
-      (viewer.ghlUserId && contact.assignedTo === viewer.ghlUserId) ||
-      opps.some((o) => repCanSee(o, contact.assignedTo, viewer.ghlUserId));
+    const visible = opps.some((o) => repCanSee(o, contact.assignedTo, viewer.ghlUserId));
     if (!visible) {
       throw new EstimateError(
         "That customer is not assigned to you in GoHighLevel.",

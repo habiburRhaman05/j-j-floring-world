@@ -73,17 +73,14 @@ export function effectiveOwnerGhlId(
   return opportunity.assignedTo || contactAssignedTo || opportunity.followers?.[0] || null;
 }
 
-/** Whether a rep may see (and move) this deal: they own it, or they follow it. */
+/** Whether a rep may see (and move) this deal: assigned in BOTH the opportunity AND the contact. */
 export function repCanSee(
   opportunity: Pick<GhlOpportunity, "assignedTo" | "followers">,
   contactAssignedTo: string | null | undefined,
   ghlUserId: string | null,
 ): boolean {
   if (!ghlUserId) return false;
-  return (
-    effectiveOwnerGhlId(opportunity, contactAssignedTo) === ghlUserId ||
-    (opportunity.followers ?? []).includes(ghlUserId)
-  );
+  return opportunity.assignedTo === ghlUserId && contactAssignedTo === ghlUserId;
 }
 
 export interface Viewer {
@@ -150,8 +147,9 @@ export async function fetchSalesBoard(connection: GhlConnection, viewer: Viewer)
     };
   });
 
-  // Contacts assigned to someone in the app who have no card in this pipeline yet.
-  const inPipeline = new Set(opportunities.map((o) => o.contactId || o.contact?.id));
+  // Contacts with a visible opportunity are in the pipeline; contacts whose only
+  // opportunity the rep can't see still appear in the assigned-contacts table.
+  const inPipeline = new Set(visible.map((o) => o.contactId || o.contact?.id));
   const assignedContacts: SalesAssignedContact[] = contacts
     .filter((c) => c.assignedTo && !inPipeline.has(c.id))
     .filter((c) => (viewer.isAdmin ? appByGhl.has(c.assignedTo!) : c.assignedTo === viewer.ghlUserId))

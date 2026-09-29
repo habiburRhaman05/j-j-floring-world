@@ -37,12 +37,8 @@ export default function GhlSignInPage() {
   }, []);
 
   return (
-    <div className="login-page">
-      <main className="login-main login-narrow">
-        <div className="login-card auto-login" role="status" aria-live="polite">
-          <span className="auto-login-spinner" aria-hidden="true" />
-        </div>
-      </main>
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }} role="status" aria-live="polite">
+      <span className="auto-login-spinner" aria-hidden="true" />
     </div>
   );
 }
