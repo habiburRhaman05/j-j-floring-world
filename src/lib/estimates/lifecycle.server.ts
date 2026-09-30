@@ -1,4 +1,5 @@
 import "server-only";
+import { randomBytes } from "crypto";
 import { prisma } from "@/lib/prisma";
 import {
   getContact,
@@ -27,7 +28,10 @@ import {
   estimateFieldValues,
   findEstimateTemplate,
   writeEstimateFields,
+  writeEstimateWebViewField,
 } from "./ghl-document.server";
+
+const APP_URL = (process.env.APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
 
 /* ==========================================================================
    lifecycle.server.ts  -  Draft -> Waiting for approval -> Approved
@@ -81,8 +85,20 @@ export async function sendEstimate(connection: GhlConnection, viewer: Viewer, es
   const blocked = emailBlockReason(contact);
   if (blocked) throw new EstimateError(blocked, 422, "email_blocked");
 
+  // Ensure a secret public-view token exists on this estimate.
+  let token = row.publicToken;
+  if (!token) {
+    token = randomBytes(24).toString("base64url");
+    await prisma.estimate.update({ where: { id: row.id }, data: { publicToken: token } });
+  }
+  const webViewUrl = `${APP_URL}/estimate/${token}`;
+
   const template = await findEstimateTemplate(connection);
-  await writeEstimateFields(connection, contact.id, estimateFieldValues(toUiEstimate(row, true)));
+  await writeEstimateFields(
+    connection,
+    contact.id,
+    estimateFieldValues(toUiEstimate(row, true), 30, webViewUrl),
+  );
 
   // Primary tier for opportunity value pre-sign: Better when it is one of
   // the packages sent, otherwise the first non-empty one. The final accepted
@@ -146,6 +162,14 @@ export async function sendEstimate(connection: GhlConnection, viewer: Viewer, es
       },
     }),
   ]);
+
+  // Update the web_view field to include the document URL for signing.
+  if (sent.url) {
+    const fullUrl = `${webViewUrl}?docsLink=${encodeURIComponent(sent.url)}`;
+    await bestEffort("web_view field update", () =>
+      writeEstimateWebViewField(connection, contact.id, fullUrl),
+    );
+  }
 
   const warning = await bestEffort("opportunity value and stage", async () => {
     const opp = await opportunityFor(connection, row);

@@ -169,6 +169,10 @@ export interface Estimate {
   sentTier?: Tier | null;
   /** The customer the estimate is for, as held on the lead. */
   customer?: { name: string; email: string; phone: string } | null;
+  /** Public web view URL for the customer, when the estimate has been sent. */
+  webViewUrl?: string | null;
+  /** The GHL document URL for the customer to sign. */
+  documentUrl?: string | null;
 }
 
 export interface JobPhoto {

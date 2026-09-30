@@ -29,7 +29,7 @@ const ICON_DONE = "M20 6L9 17l-5-5";
 export const ADMIN_NAV: NavEntry[] = [
   { key: "overview", href: "/admin", label: "Dashboard" },
   { key: "pipeline", href: "/admin/pipeline", label: "Sales Pipeline" },
-  { key: "jobs", href: "/admin/jobs", label: "Jobs & Invoices" },
+  { key: "invoices", href: "/admin/invoices", label: "Invoices" },
   { key: "products", href: "/admin/products", label: "Products" },
   { key: "team", href: "/admin/team", label: "Team" },
 ];

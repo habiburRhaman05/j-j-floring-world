@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useCallback } from "react";
 import { EstimateStatusPill } from "@/components/estimator/estimate-status";
 import { Modal } from "@/components/ui/modal";
 import { Panel, PanelBody, PanelHead } from "@/components/ui/panel";
@@ -24,6 +25,19 @@ interface EstimateDetailProps {
  */
 export function EstimateDetail({ open, onOpenChange, db, estimateId }: EstimateDetailProps) {
   const estimate = db.estimates.find((e) => e.id === estimateId) ?? null;
+  const [copied, setCopied] = useState(false);
+  const copyLink = useCallback(() => {
+    if (!estimate?.webViewUrl) return;
+    // Include documentUrl as docsLink query param when available
+    const url = estimate.documentUrl
+      ? `${estimate.webViewUrl}?docsLink=${encodeURIComponent(estimate.documentUrl)}`
+      : estimate.webViewUrl;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, [estimate?.webViewUrl, estimate?.documentUrl]);
+
   if (!estimate) return null;
 
   const lead = db.leads.find((l) => l.id === estimate.leadId) ?? null;
@@ -58,6 +72,39 @@ export function EstimateDetail({ open, onOpenChange, db, estimateId }: EstimateD
           </span>
         )}
       </div>
+
+      {estimate.webViewUrl ? (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            marginBottom: 14,
+            padding: "8px 12px",
+            background: "var(--blue-tint)",
+            borderRadius: 8,
+            fontSize: 13,
+          }}
+        >
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style={{ flex: "none" }}>
+            <path
+              d="M6.5 9.5l3-3M7 11l-1.15 1.15a2.12 2.12 0 01-3-3L4 8m5-3l1.15-1.15a2.12 2.12 0 013 3L12 8"
+              stroke="var(--blue)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+            />
+          </svg>
+          <span className="t-meta" style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            Web view link
+          </span>
+          <button
+            type="button"
+            className="btn btn-sm"
+            onClick={copyLink}
+            style={{ flex: "none" }}
+          >
+            {copied ? "Copied!" : "Copy link"}
+          </button>
+        </div>
+      ) : null}
 
       {estimate.customerNotes ? (
         <p className="t-meta" style={{ margin: "0 0 14px", whiteSpace: "pre-line" }}>

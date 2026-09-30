@@ -38,7 +38,7 @@ export const ESTIMATE_TEMPLATE_NAME = process.env.GHL_ESTIMATE_TEMPLATE_NAME?.tr
 const TIERS_ORDERED: Tier[] = ["Good", "Better", "Best"];
 
 /** Shared across every package. */
-type SharedKey = "number" | "customer_name" | "valid_until" | "notes";
+type SharedKey = "number" | "customer_name" | "valid_until" | "notes" | "web_view";
 
 /** Repeated for each of Good / Better / Best. */
 type PerTierKey = "label" | "summary" | "scope" | "subtotal" | "discount" | "tax" | "total" | "deposit";
@@ -63,12 +63,13 @@ const PER_TIER_SPECS: { key: PerTierKey; label: string; type: "TEXT" | "LARGE_TE
   { key: "deposit", label: "Deposit Due", type: "TEXT" },
 ];
 
-/** All 4 shared + 3 tiers × 8 per-tier = 28 fields. */
+/** All 5 shared + 3 tiers × 8 per-tier = 29 fields. */
 export const ESTIMATE_FIELDS: readonly FieldSpec[] = [
   { key: "number", name: "Estimate - Number", type: "TEXT" },
   { key: "customer_name", name: "Estimate - Customer Name", type: "TEXT" },
   { key: "valid_until", name: "Estimate - Valid Until", type: "TEXT" },
   { key: "notes", name: "Estimate - Notes", type: "LARGE_TEXT" },
+  { key: "web_view", name: "estimate_web_view", type: "TEXT" },
   ...TIERS_ORDERED.flatMap((tier) =>
     PER_TIER_SPECS.map(
       (spec): FieldSpec => ({
@@ -237,12 +238,14 @@ function tierFieldValues(
 export function estimateFieldValues(
   estimate: Estimate,
   validDays = 30,
+  webViewUrl?: string,
 ): Record<EstimateFieldKey, string> {
   const out: Partial<Record<EstimateFieldKey, string>> = {
     number: estimate.number,
     customer_name: estimate.customer?.name ?? "",
     valid_until: dateLong(new Date(Date.now() + validDays * 24 * 60 * 60 * 1000)),
     notes: estimate.customerNotes?.trim() ?? "",
+    web_view: webViewUrl ?? "",
   };
 
   for (const tier of TIERS_ORDERED) {
@@ -286,6 +289,19 @@ export function emailBlockReason(contact: {
   const email = contact.dndSettings?.Email?.status?.toLowerCase();
   const optedOut = email ? email === "active" || email === "permanent" : contact.dnd === true;
   return optedOut ? "This customer has opted out of email (Do Not Disturb), so it can't be sent." : null;
+}
+
+/** Writes only the `estimate_web_view` custom field on a contact, e.g.
+ *  after GHL returns the document URL so the link can include `?docsLink=`. */
+export async function writeEstimateWebViewField(
+  connection: GhlConnection,
+  contactId: string,
+  url: string,
+): Promise<void> {
+  const fields = await ensureEstimateFields(connection);
+  const f = fields.get("web_view");
+  if (!f) return;
+  await setContactCustomFields(connection, contactId, [{ id: f.id, value: url }]);
 }
 
 /** Finds the saved template to send. Read-only. */

@@ -28,7 +28,6 @@ import { usePriceBook } from "@/lib/pricebook/hooks";
 import type { PriceBookItem } from "@/lib/pricebook/types";
 import type {
   Database,
-  DiscountType,
   Estimate,
   EstimateLine,
   EstimateTierMeta,
@@ -997,53 +996,47 @@ export function EstimateBuilder({
 
               <div className="pkg-discount">
                 <div className="field-row">
-                  <Field label="Package discount" style={{ flex: "0 0 150px" }}>
+                  <Field label="Discount" style={{ flex: "0 0 180px" }}>
                     <Select
-                      value={meta.discountType ?? ""}
-                      onChange={(event) =>
-                        updateMeta(activeTier, {
-                          discountType: (event.target.value ||
-                            null) as DiscountType | null,
-                        })
+                      value={
+                        meta.discountType === "percent" && meta.discountValue > 0
+                          ? String(meta.discountValue)
+                          : "0"
                       }
+                      onChange={(event) => {
+                        const val = Number(event.target.value);
+                        if (val > 0) {
+                          updateMeta(activeTier, {
+                            discountType: "percent",
+                            discountValue: val,
+                          });
+                        } else {
+                          updateMeta(activeTier, {
+                            discountType: null,
+                            discountValue: 0,
+                          });
+                        }
+                      }}
                     >
-                      <option value="">No discount</option>
-                      <option value="percent">% off</option>
-                      <option value="amount">$ off</option>
+                      <option value="0">No discount</option>
+                      <option value="5">5% off</option>
+                      <option value="10">10% off</option>
+                      <option value="15">15% off</option>
+                      <option value="20">20% off</option>
                     </Select>
                   </Field>
-                  {meta.discountType ? (
-                    <>
-                      <Field
-                        label={
-                          meta.discountType === "percent" ? "Percent" : "Amount"
+                  {meta.discountType === "percent" && meta.discountValue > 0 ? (
+                    <Field label="Reason (internal only)" className="grow">
+                      <Input
+                        value={meta.discountReason ?? ""}
+                        placeholder="e.g. Spring promo, price match, repeat customer"
+                        onChange={(event) =>
+                          updateMeta(activeTier, {
+                            discountReason: event.target.value || null,
+                          })
                         }
-                        style={{ flex: "0 0 110px" }}
-                      >
-                        <Input
-                          type="number"
-                          min={0}
-                          step={meta.discountType === "percent" ? 1 : 0.01}
-                          value={meta.discountValue || ""}
-                          onChange={(event) =>
-                            updateMeta(activeTier, {
-                              discountValue: Number(event.target.value) || 0,
-                            })
-                          }
-                        />
-                      </Field>
-                      <Field label="Reason (internal only)" className="grow">
-                        <Input
-                          value={meta.discountReason ?? ""}
-                          placeholder="e.g. Spring promo, price match, repeat customer"
-                          onChange={(event) =>
-                            updateMeta(activeTier, {
-                              discountReason: event.target.value || null,
-                            })
-                          }
-                        />
-                      </Field>
-                    </>
+                      />
+                    </Field>
                   ) : null}
                 </div>
                 {commissionPercent !== null && totals.subtotalPrice > 0 ? (

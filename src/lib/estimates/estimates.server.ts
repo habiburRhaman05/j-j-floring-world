@@ -179,6 +179,10 @@ export function toUiEstimate(row: EstimateRow, includeCost: boolean): Estimate {
       email: row.lead.email ?? "",
       phone: row.lead.phone ?? "",
     },
+    webViewUrl: row.publicToken
+      ? `${(process.env.APP_URL ?? "http://localhost:3000").replace(/\/$/, "")}/estimate/${row.publicToken}`
+      : null,
+    documentUrl: row.documentUrl ?? null,
   };
 }
 

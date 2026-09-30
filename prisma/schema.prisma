@@ -999,6 +999,8 @@ model Estimate {
 
   // --- GHL document mirror (decision D4) ---
   ghlDocumentId    String?        @unique
+  /// Secret for the customer's public web view (/estimate/<token>). Set on first send.
+  publicToken      String?        @unique
   documentStatus   DocumentStatus @default(NOT_CREATED)
   documentUrl      String?
   documentSentAt   DateTime?
