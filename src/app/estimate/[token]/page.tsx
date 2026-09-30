@@ -17,6 +17,8 @@ const ALLOWED_DOC_HOSTS = [
   "gohighlevel.com",
   "leadconnectorhq.com",
   "msgsndr.com",
+  "app.jjflooringworld.com",
+  "jjflooringworld.com",
 ];
 
 function isSafeDocLink(url: string): boolean {
