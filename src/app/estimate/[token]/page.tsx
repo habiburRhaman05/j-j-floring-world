@@ -196,16 +196,30 @@ export default async function PublicEstimatePage(props: {
                 {estimate.signedByName ? ` by ${estimate.signedByName}` : ""}
               </span>
             </div>
-          ) : docsLink ? (
-            <a
-              href={docsLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn btn-primary btn-lg pe-sign-btn"
-            >
-              Review &amp; sign document
-            </a>
-          ) : null}
+          ) : (
+            <div className="pe-action-buttons">
+              {docsLink ? (
+                <a
+                  href={docsLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn btn-primary btn-lg pe-sign-btn"
+                >
+                  Review &amp; sign document
+                </a>
+              ) : null}
+              {docsLink ? (
+                <a
+                  href={docsLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn btn-secondary btn-lg pe-approve-btn"
+                >
+                  Approve estimate
+                </a>
+              ) : null}
+            </div>
+          )}
         </div>
 
         {/* Footer */}
@@ -323,7 +337,17 @@ export default async function PublicEstimatePage(props: {
           text-align: center;
           margin: 28px 0;
         }
+        .pe-action-buttons {
+          display: flex;
+          gap: 12px;
+          justify-content: center;
+          flex-wrap: wrap;
+        }
         .pe-sign-btn {
+          font-size: 16px;
+          padding: 14px 32px;
+        }
+        .pe-approve-btn {
           font-size: 16px;
           padding: 14px 32px;
         }
@@ -352,6 +376,7 @@ export default async function PublicEstimatePage(props: {
           .pe-header { flex-direction: column; }
           .pe-header-meta { text-align: left; }
           .pe-meta-row { justify-content: flex-start; }
+          .pe-action-buttons { flex-direction: column; }
         }
       `}</style>
     </div>
