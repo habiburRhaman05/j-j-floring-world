@@ -11,15 +11,17 @@ import { Pill, StagePill } from "@/components/ui/pill";
 import { Stat, StatStrip } from "@/components/ui/stat";
 import { amountOwed, companyTotals, jobPipelineCounts, repStats, salesFunnel } from "@/lib/data/selectors";
 import { money, money2, pct } from "@/lib/format";
+import { useCommissionTiers } from "@/lib/sales/hooks";
 import type { Database, Invoice, RepStats, Role } from "@/lib/types";
 // The overview is Admin-only, so the Role prop is simply "Admin" at the route.
 
 export function AdminOverview({ db, role }: { db: Database; role: Role }) {
   const totals = companyTotals(db);
 
+  const tiers = useCommissionTiers().data?.commissionTiers;
   const reps = db.users
     .filter((u) => u.role === "Sales Rep")
-    .map((u) => repStats(db, u.id))
+    .map((u) => repStats(db, u.id, tiers))
     .sort((a, b) => b.revenue - a.revenue);
 
   const openInvoices = db.invoices.filter((i) => i.paymentStatus !== "Paid");

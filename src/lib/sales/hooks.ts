@@ -59,6 +59,16 @@ export function useMoveSalesOpportunity() {
   });
 }
 
+/** Commission tiers for the estimate builder's discount preview. */
+export function useCommissionTiers() {
+  return useQuery({
+    queryKey: ["sales", "commission-tiers"],
+    queryFn: () =>
+      apiGet<Pick<SalesRates, "commissionTiers" | "appointmentFee">>(endpoints.sales.rates),
+    staleTime: 60_000,
+  });
+}
+
 export function useSaveSalesRates() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -68,6 +78,7 @@ export function useSaveSalesRates() {
       apiPut<SalesRates>(endpoints.sales.rates, rates),
     onSuccess: () => {
       toast("Rates saved. Commission and margin are recalculated.", "ok");
+      void queryClient.invalidateQueries({ queryKey: ["sales", "commission-tiers"] });
       return queryClient.invalidateQueries({ queryKey: salesBoardKey });
     },
     onError: (error) => toast(toApiError(error).displayMessage, "warn", 5200),

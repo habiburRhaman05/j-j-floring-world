@@ -5,8 +5,10 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Panel, PanelBody, PanelHead } from "@/components/ui/panel";
 import { StagePill } from "@/components/ui/pill";
 import { Stat, StatStrip } from "@/components/ui/stat";
-import { repStats } from "@/lib/data/selectors";
+import { invoiceDiscountPercent, repStats } from "@/lib/data/selectors";
 import { money, money2, pct } from "@/lib/format";
+import { useCommissionTiers } from "@/lib/sales/hooks";
+import { lookupCommissionRate } from "@/lib/sales/metrics";
 import type { Database, Invoice, Lead } from "@/lib/types";
 
 interface WonRow {
@@ -16,7 +18,8 @@ interface WonRow {
 
 /** Your own numbers only. Company cost and margin are not part of this view. */
 export function RepCommission({ db, meId }: { db: Database; meId: string }) {
-  const stats = repStats(db, meId);
+  const tiers = useCommissionTiers().data?.commissionTiers ?? [];
+  const stats = repStats(db, meId, tiers);
 
   const won: WonRow[] = db.leads
     .filter((l) => l.assignedRepId === meId && l.stage === "Won")
@@ -39,16 +42,27 @@ export function RepCommission({ db, meId }: { db: Database; meId: string }) {
       cell: ({ row }) => (row.original.invoice ? money2(row.original.invoice.totalPrice) : "-"),
     },
     {
+      id: "discount",
+      header: "Discount given",
+      meta: { numeric: true },
+      cell: ({ row }) =>
+        row.original.invoice ? pct(invoiceDiscountPercent(db, row.original.invoice)) : "-",
+    },
+    {
       id: "commission",
       header: "Commission",
       meta: { numeric: true },
-      cell: ({ row }) => (
-        <span style={{ color: "var(--moss)", fontWeight: 600 }}>
-          {row.original.invoice
-            ? money2(row.original.invoice.totalPrice * stats.commissionRate)
-            : "-"}
-        </span>
-      ),
+      cell: ({ row }) => {
+        const inv = row.original.invoice;
+        if (!inv) return "-";
+        const rate = lookupCommissionRate(invoiceDiscountPercent(db, inv), tiers);
+        return (
+          <span style={{ color: "var(--moss)", fontWeight: 600 }}>
+            {money2((inv.totalPrice * rate) / 100)}{" "}
+            <span className="t-meta">at {rate}%</span>
+          </span>
+        );
+      },
     },
     {
       id: "payment",
@@ -75,7 +89,7 @@ export function RepCommission({ db, meId }: { db: Database; meId: string }) {
         <Stat
           label="Commission owed"
           value={money2(stats.commission)}
-          note={`At ${pct(stats.commissionRate * 100)}`}
+          note={stats.revenue ? `Averages ${pct(stats.commissionRate * 100)} of revenue` : "Based on the discount you give"}
           tone="good"
         />
       </StatStrip>
@@ -83,7 +97,7 @@ export function RepCommission({ db, meId }: { db: Database; meId: string }) {
       <Panel className="section">
         <PanelHead>
           <h3>Won deals</h3>
-          <span className="t-meta">Commission is calculated on contract value</span>
+          <span className="t-meta">Commission rate depends on the discount given on each deal</span>
         </PanelHead>
         {won.length ? (
           <DataTable columns={columns} data={won} />

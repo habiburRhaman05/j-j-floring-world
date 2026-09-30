@@ -88,9 +88,19 @@ export function inRange(iso: string | null, range: DateRange): boolean {
 
 const isClosedLost = (o: SalesOpportunity) => o.status === "lost" || o.status === "abandoned";
 
-export function commissionPercentFor(userId: string | null, rates: SalesRates): number {
-  if (userId && userId in rates.repCommissionPercent) return rates.repCommissionPercent[userId]!;
-  return rates.defaultCommissionPercent;
+/**
+ * Commission % for a discount: the first tier whose max discount covers it.
+ * Past the last capped tier the deal needs owner approval, so it pays 0.
+ */
+export function lookupCommissionRate(
+  discountPercent: number,
+  tiers: readonly { maxDiscountPercent: number | null; commissionPercent: number }[],
+): number {
+  const sorted = [...tiers].sort(
+    (a, b) => (a.maxDiscountPercent ?? Infinity) - (b.maxDiscountPercent ?? Infinity),
+  );
+  const tier = sorted.find((t) => t.maxDiscountPercent === null || discountPercent <= t.maxDiscountPercent + 1e-9);
+  return tier?.commissionPercent ?? 0;
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -165,7 +175,7 @@ export function computeMetrics(
     } else if (o.status === "won" && inRange(o.closedAt, range)) {
       m.wonCount += 1;
       m.wonValue += o.value;
-      m.commission += o.value * (commissionPercentFor(o.ownerUserId, rates) / 100);
+      m.commission += o.value * (lookupCommissionRate(o.discountPercent, rates.commissionTiers) / 100);
       if (o.createdAt && o.closedAt) {
         const days = (new Date(o.closedAt).getTime() - new Date(o.createdAt).getTime()) / DAY_MS;
         if (days >= 0) {
@@ -225,8 +235,11 @@ export function metricsByOwner(
     .map((g) => ({
       ownerUserId: g.ownerUserId,
       ownerName: g.ownerName,
-      commissionPercent: commissionPercentFor(g.ownerUserId, rates),
       metrics: computeMetrics(g.items, range, rates),
+    }))
+    .map((g) => ({
+      ...g,
+      commissionPercent: g.metrics.wonValue ? round2((g.metrics.commission / g.metrics.wonValue) * 100) : 0,
     }))
     .sort((a, b) => b.metrics.wonValue - a.metrics.wonValue || a.ownerName.localeCompare(b.ownerName));
 }

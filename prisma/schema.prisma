@@ -936,6 +936,23 @@ model Product {
   @@map("products")
 }
 
+/// Cost side of a GoHighLevel product price. GHL holds only the sell price, so
+/// the admin records install + material cost here; margin is always derived.
+/// Never sent to GHL and never shown to a sales rep.
+model ProductCost {
+  id           String   @id @default(cuid())
+  ghlProductId String
+  ghlPriceId   String
+  installCost  Decimal  @default(0) @db.Decimal(14, 4)
+  materialCost Decimal  @default(0) @db.Decimal(14, 4)
+  updatedById  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([ghlProductId, ghlPriceId])
+  @@map("product_costs")
+}
+
 /// Append-only price change log (FR-ADM-14). Never updated.
 model ProductPriceHistory {
   id        String   @id @default(cuid())

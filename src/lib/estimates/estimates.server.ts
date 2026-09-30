@@ -423,19 +423,36 @@ async function preparedTiers(input: EstimateSaveInput, isAdmin: boolean) {
   );
   const taxRate = input.taxRate;
 
+  // GHL holds only the sell price; the admin records install + material cost per price.
+  const ghlPairs = TIERS.flatMap((t) => input.tiers[t])
+    .filter((l) => l.ghlProductId && l.ghlPriceId)
+    .map((l) => ({ ghlProductId: l.ghlProductId!, ghlPriceId: l.ghlPriceId! }));
+  const ghlCosts = ghlPairs.length
+    ? await prisma.productCost.findMany({ where: { OR: ghlPairs } })
+    : [];
+  const ghlCostOf = new Map(
+    ghlCosts.map((c) => [`${c.ghlProductId}:${c.ghlPriceId}`, Number(c.installCost) + Number(c.materialCost)] as const),
+  );
+
   const tierRows = [];
   const lineRows = [];
   for (const [index, tier] of TIERS.entries()) {
     const meta = input.tierMeta?.[tier] ?? blankTierMeta();
-    const lines = input.tiers[tier].map((l) => ({
-      ...l,
-      productId: l.productId && costOf.has(l.productId) ? l.productId : null,
-      unitCost: isAdmin
-        ? Number(l.unitCost) || 0
-        : l.productId
-          ? (costOf.get(l.productId) ?? 0)
-          : 0,
-    }));
+    const lines = input.tiers[tier].map((l) => {
+      const recorded = l.ghlProductId && l.ghlPriceId ? ghlCostOf.get(`${l.ghlProductId}:${l.ghlPriceId}`) : undefined;
+      const typed = Number(l.unitCost) || 0;
+      return {
+        ...l,
+        productId: l.productId && costOf.has(l.productId) ? l.productId : null,
+        unitCost: isAdmin
+          ? typed > 0
+            ? typed
+            : (recorded ?? 0)
+          : l.productId
+            ? (costOf.get(l.productId) ?? 0)
+            : (recorded ?? 0),
+      };
+    });
     const totals = estimateTierTotals(lines, meta, taxRate);
     const hasDiscount = Boolean(meta.discountType) && meta.discountValue > 0;
     const tierId = randomUUID();

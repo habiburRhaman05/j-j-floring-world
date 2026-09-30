@@ -153,7 +153,7 @@ async function sendGhlInvoice(connection: GhlConnection, invoiceId: string, data
   return extractInvoice(raw);
 }
 
-async function listGhlInvoices(connection: GhlConnection, locationId: string, contactId?: string): Promise<GhlInvoiceResponse[]> {
+export async function listGhlInvoices(connection: GhlConnection, locationId: string, contactId?: string): Promise<GhlInvoiceResponse[]> {
   const params = new URLSearchParams({ altId: locationId, altType: "location", limit: "100" });
   if (contactId) params.set("contactId", contactId);
   const raw = await ghlInvoiceFetch<Record<string, unknown>>(connection, `/invoices/?${params}`);

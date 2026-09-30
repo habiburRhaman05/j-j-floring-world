@@ -17,6 +17,7 @@ import type {
   JobFinancials,
   RepStats,
 } from "../types";
+import { lookupCommissionRate } from "../sales/metrics";
 import { byId, estimateTierTotals } from "./pricing";
 
 export function invoiceForJob(db: Database, jobId: string): Invoice | null {
@@ -72,14 +73,36 @@ export function companyTotals(db: Database): CompanyTotals {
   };
 }
 
-export function repStats(db: Database, repId: string): RepStats {
+export interface CommissionTierInput {
+  maxDiscountPercent: number | null;
+  commissionPercent: number;
+}
+
+/** Discount % the rep gave on the package this invoice was signed for. */
+export function invoiceDiscountPercent(db: Database, inv: Invoice): number {
+  const estimate = inv.estimateId ? db.estimates.find((e) => e.id === inv.estimateId) : null;
+  if (!estimate) return 0;
+  const totals = estimateTierTotals(estimate.tiers[inv.tier], estimate.tierMeta[inv.tier], estimate.taxRate);
+  return totals.subtotalPrice > 0 ? (totals.discountAmount / totals.subtotalPrice) * 100 : 0;
+}
+
+/**
+ * A rep's numbers. Commission is the same for every rep: each won invoice pays
+ * the tier that matches the discount given on it (none loaded yet pays nothing).
+ */
+export function repStats(db: Database, repId: string, tiers: readonly CommissionTierInput[] = []): RepStats {
   const u = byId(db.users, repId);
   const won = db.leads.filter((l) => l.assignedRepId === repId && l.stage === "Won");
 
   let revenue = 0;
+  let commission = 0;
   for (const l of won) {
     for (const inv of db.invoices) {
-      if (inv.leadId === l.id) revenue += inv.totalPrice;
+      if (inv.leadId === l.id) {
+        revenue += inv.totalPrice;
+        commission +=
+          inv.totalPrice * (lookupCommissionRate(invoiceDiscountPercent(db, inv), tiers) / 100);
+      }
     }
   }
 
@@ -89,7 +112,6 @@ export function repStats(db: Database, repId: string): RepStats {
   const dealsLost = db.leads.filter(
     (l) => l.assignedRepId === repId && l.stage === "Lost",
   ).length;
-  const rate = u?.commissionRate ?? 0;
 
   return {
     repId,
@@ -98,8 +120,8 @@ export function repStats(db: Database, repId: string): RepStats {
     dealsLost,
     openLeads,
     revenue: round2(revenue),
-    commissionRate: rate,
-    commission: round2(revenue * rate),
+    commissionRate: revenue ? commission / revenue : 0,
+    commission: round2(commission),
     closeRate: won.length + dealsLost ? round2((won.length / (won.length + dealsLost)) * 100) : 0,
   };
 }

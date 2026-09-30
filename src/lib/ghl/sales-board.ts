@@ -124,6 +124,34 @@ export async function fetchSalesBoard(connection: GhlConnection, viewer: Viewer)
     ? opportunities
     : opportunities.filter((o) => repCanSee(o, contactOf(o), viewer.ghlUserId));
 
+  // Commission depends on the discount given, which lives on the signed estimate.
+  const signed = await prisma.estimate.findMany({
+    where: {
+      acceptedTier: { not: null },
+      lead: { ghlOpportunityId: { in: visible.map((o) => o.id) } },
+    },
+    orderBy: { signedAt: "asc" },
+    select: {
+      acceptedTier: true,
+      lead: { select: { ghlOpportunityId: true } },
+      tiers: { select: { level: true, discountPercent: true, discountAmount: true, subtotalPrice: true } },
+    },
+  });
+  const discountByOpportunity = new Map<string, number>();
+  for (const e of signed) {
+    const tier = e.tiers.find((t) => t.level === e.acceptedTier);
+    const oppId = e.lead.ghlOpportunityId;
+    if (!tier || !oppId) continue;
+    const subtotal = Number(tier.subtotalPrice);
+    const percent =
+      tier.discountPercent !== null
+        ? Number(tier.discountPercent)
+        : tier.discountAmount !== null && subtotal > 0
+          ? (Number(tier.discountAmount) / subtotal) * 100
+          : 0;
+    discountByOpportunity.set(oppId, Math.round(percent * 100) / 100);
+  }
+
   const mapped: SalesOpportunity[] = visible.map((o) => {
     const status = (o.status || "open").toLowerCase();
     const ownerGhlId = effectiveOwnerGhlId(o, contactOf(o));
@@ -142,6 +170,7 @@ export async function fetchSalesBoard(connection: GhlConnection, viewer: Viewer)
       updatedAt: o.updatedAt ?? null,
       closedAt: status === "open" ? null : (o.lastStatusChangeAt ?? o.updatedAt ?? null),
       source: o.source ?? null,
+      discountPercent: discountByOpportunity.get(o.id) ?? 0,
       assignedToGhlId: ownerGhlId,
       ...ownerOf(ownerGhlId),
     };
@@ -185,12 +214,7 @@ export async function fetchSalesBoard(connection: GhlConnection, viewer: Viewer)
     rates: viewer.isAdmin
       ? rates
       : {
-          defaultCommissionPercent: rates.defaultCommissionPercent,
           marginPercent: null,
-          repCommissionPercent:
-            viewer.userId in rates.repCommissionPercent
-              ? { [viewer.userId]: rates.repCommissionPercent[viewer.userId]! }
-              : {},
           appointmentFee: rates.appointmentFee,
           commissionTiers: rates.commissionTiers,
         },

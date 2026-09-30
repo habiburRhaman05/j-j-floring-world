@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { PipelineBoard, PipelineBoardSkeleton } from "@/components/csr/pipeline-board";
+import { InvoicesPanel } from "@/components/sales/invoices-panel";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input, Select } from "@/components/ui/input";
@@ -210,11 +211,7 @@ export function SalesDashboard({ scope }: { scope: "all" | "own" }) {
         <Stat
           label={isAdmin ? "Commission owed" : "My commission"}
           value={money(totals.commission)}
-          note={
-            isAdmin
-              ? "Per rep rate on won revenue"
-              : `${commissionNote(data)} of won revenue`
-          }
+          note="Based on the discount given on each won deal"
           tone="gold"
         />
         <Stat
@@ -477,6 +474,8 @@ export function SalesDashboard({ scope }: { scope: "all" | "own" }) {
         )}
       </Panel>
 
+      <InvoicesPanel isAdmin={isAdmin} />
+
       {isAdmin ? <RatesPanel data={data} /> : null}
 
       {data.opportunities.length === 0 && !data.notice ? (
@@ -489,11 +488,6 @@ export function SalesDashboard({ scope }: { scope: "all" | "own" }) {
       ) : null}
     </>
   );
-}
-
-function commissionNote(data: SalesBoardResponse): string {
-  const own = Object.values(data.rates.repCommissionPercent)[0];
-  return `${own ?? data.rates.defaultCommissionPercent}%`;
 }
 
 function countFor(list: readonly SalesOpportunity[], status: StatusFilter): number {
@@ -529,17 +523,11 @@ function MonthLine({
   );
 }
 
-/** Admin: the default and per-rep commission percent, and the average gross margin. */
+/** Admin: the discount-based commission tiers, appointment fee and average gross margin. */
 function RatesPanel({ data }: { data: SalesBoardResponse }) {
   const save = useSaveSalesRates();
-  const [defaultPct, setDefaultPct] = useState(String(data.rates.defaultCommissionPercent));
   const [marginPct, setMarginPct] = useState(String(data.rates.marginPercent ?? 35));
   const [apptFee, setApptFee] = useState(String(data.rates.appointmentFee ?? 75));
-  const [repPct, setRepPct] = useState<Record<string, string>>(() =>
-    Object.fromEntries(
-      data.reps.map((r) => [r.userId, r.userId in data.rates.repCommissionPercent ? String(data.rates.repCommissionPercent[r.userId]) : ""]),
-    ),
-  );
 
   const defaultTiers = data.rates.commissionTiers ?? [];
   const [tiers, setTiers] = useState(() =>
@@ -570,16 +558,13 @@ function RatesPanel({ data }: { data: SalesBoardResponse }) {
         <div>
           <h3>Commission and margin</h3>
           <div className="t-meta">
-            Commission is a percent of each won deal&apos;s value. The pipeline stores only the
-            sale value, so margin uses your average gross margin.
+            Every rep earns the same: commission depends only on the discount given on the signed
+            estimate. The pipeline stores only the sale value, so margin uses your average gross margin.
           </div>
         </div>
       </PanelHead>
       <PanelBody>
         <div className="field-row">
-          <Field label="Default commission %">
-            <Input type="number" min={0} max={100} step={0.5} value={defaultPct} onChange={(e) => setDefaultPct(e.target.value)} />
-          </Field>
           <Field label="Average gross margin %">
             <Input type="number" min={0} max={100} step={1} value={marginPct} onChange={(e) => setMarginPct(e.target.value)} />
           </Field>
@@ -587,34 +572,12 @@ function RatesPanel({ data }: { data: SalesBoardResponse }) {
             <Input type="number" min={0} step={5} value={apptFee} onChange={(e) => setApptFee(e.target.value)} />
           </Field>
         </div>
-        {data.reps.length ? (
-          <div className="field-row">
-            {data.reps.map((rep) => (
-              <Field key={rep.userId} label={`${rep.name} commission %`}>
-                <Input
-                  type="number"
-                  min={0}
-                  max={100}
-                  step={0.5}
-                  placeholder={`Default (${defaultPct || 0}%)`}
-                  value={repPct[rep.userId] ?? ""}
-                  onChange={(e) => setRepPct((prev) => ({ ...prev, [rep.userId]: e.target.value }))}
-                />
-              </Field>
-            ))}
-          </div>
-        ) : (
-          <div className="t-meta" style={{ marginBottom: 12 }}>
-            No users have the Sales Rep role yet.
-          </div>
-        )}
-
         <div style={{ marginTop: 16, marginBottom: 12 }}>
           <h4 style={{ margin: "0 0 4px" }}>Commission tiers by discount %</h4>
           <div className="t-meta" style={{ marginBottom: 8 }}>
-            When a deal&apos;s total discount % is known, the commission rate is looked up from this
-            table instead of the flat default. Leave &ldquo;Max discount&rdquo; blank for the final
-            catch-all tier (owner approval / 0%).
+            A deal pays the first tier whose max discount covers the discount given. Leave
+            &ldquo;Max discount&rdquo; blank for the final catch-all tier (over the last limit needs
+            owner approval, so 0%).
           </div>
           <table className="product-variants-table" style={{ marginBottom: 8 }}>
             <thead>
@@ -668,15 +631,9 @@ function RatesPanel({ data }: { data: SalesBoardResponse }) {
           loading={save.isPending}
           onClick={() =>
             save.mutate({
-              defaultCommissionPercent: Number(defaultPct) || 0,
               marginPercent: Number(marginPct) || 0,
               appointmentFee: Number(apptFee) || 0,
               commissionTiers: buildTiers(),
-              repCommissionPercent: Object.fromEntries(
-                Object.entries(repPct)
-                  .filter(([, v]) => v.trim() !== "")
-                  .map(([id, v]) => [id, Number(v) || 0]),
-              ),
             })
           }
         >

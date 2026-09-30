@@ -18,6 +18,8 @@ export interface SalesOpportunity extends CsrBoardOpportunity {
   closedAt: string | null;
   updatedAt: string | null;
   source: string | null;
+  /** Discount % on the signed estimate for this deal; 0 when none is on file. */
+  discountPercent: number;
 }
 
 export interface SalesRep {
@@ -45,21 +47,17 @@ export interface CommissionTier {
 /**
  * Commission and margin inputs. GHL stores only the sale value, so margin is
  * an estimate from the company's average gross margin; commission is a
- * percent of won revenue, per rep when set, else the default.
+ * percent of won revenue that depends only on the discount given.
  *
- * `commissionTiers` maps a discount-percentage bracket to a commission rate
- * (from the Costing spreadsheet). `appointmentFee` is a flat dollar amount
- * added to every rep's pay per closed deal.
+ * `commissionTiers` maps a discount-percentage bracket to a commission rate.
+ * `appointmentFee` is a flat dollar amount added to every rep's pay per closed deal.
  */
 export interface SalesRates {
-  defaultCommissionPercent: number;
   /** Company-average gross margin on won revenue. Admin only; null for reps. */
   marginPercent: number | null;
-  /** userId -> commission percent. A rep only ever receives their own. */
-  repCommissionPercent: Record<string, number>;
   /** Flat fee per closed deal added to rep pay ($75 default). */
   appointmentFee: number;
-  /** Tiered commission: rate depends on the total discount % given. */
+  /** Commission depends only on the discount % the rep gave on the signed estimate. */
   commissionTiers: CommissionTier[];
 }
 

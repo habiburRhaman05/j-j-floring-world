@@ -51,6 +51,8 @@ export const endpoints = {
       `/api/sales/opportunities/${encodeURIComponent(opportunityId)}/stage`,
     rates: "/api/sales/rates",
     products: "/api/sales/products",
+    /** Admin only: install + material cost per GHL product price. */
+    productCosts: "/api/admin/products/cost",
   },
 
   /** The CSR dashboard: GHL pipelines, their opportunities, and fb-lead contacts. */

@@ -11,7 +11,8 @@ import { Panel, PanelBody, PanelHead } from "@/components/ui/panel";
 import { Segmented } from "@/components/ui/segmented";
 import { SendEstimateDialog } from "@/components/estimator/send-estimate-dialog";
 import { useAppStore } from "@/lib/data/hooks";
-import { useSalesBoard } from "@/lib/sales/hooks";
+import { useCommissionTiers, useSalesBoard } from "@/lib/sales/hooks";
+import { lookupCommissionRate } from "@/lib/sales/metrics";
 import {
   blankCustomLine,
   blankTierMeta,
@@ -177,7 +178,6 @@ export function EstimateBuilder({
   const [depositPercent, setDepositPercent] = useState(
     String(existing?.depositPercent ?? 30),
   );
-  const [taxRate, setTaxRate] = useState(String(existing?.taxRate ?? 0));
   const [area, setArea] = useState("");
   const [activeTier, setActiveTier] = useState<Tier>("Better");
   const [search, setSearch] = useState("");
@@ -202,7 +202,7 @@ export function EstimateBuilder({
   const [sendTarget, setSendTarget] = useState<Estimate | null>(null);
 
   const areaValue = Number(area) || 0;
-  const taxValue = Math.max(Number(taxRate) || 0, 0);
+  const taxValue = 0;
   const depositValue = Math.min(Math.max(Number(depositPercent) || 0, 0), 100);
 
   // Customers come live from GoHighLevel, the same data as the Sales Pipeline
@@ -261,6 +261,7 @@ export function EstimateBuilder({
 
   // The price book is GoHighLevel's Payments > Products, read live.
   const priceBook = usePriceBook();
+  const commissionTiers = useCommissionTiers().data?.commissionTiers;
   const catalog = useMemo(() => {
     const q = search.trim().toLowerCase();
     return (priceBook.data?.products ?? []).filter(
@@ -423,6 +424,11 @@ export function EstimateBuilder({
   const lines = tiers[activeTier];
   const meta = tierMeta[activeTier];
   const totals = totalsByTier[activeTier];
+  const discountPercentGiven =
+    totals.subtotalPrice > 0 ? (totals.discountAmount / totals.subtotalPrice) * 100 : 0;
+  const commissionPercent = commissionTiers
+    ? lookupCommissionRate(discountPercentGiven, commissionTiers)
+    : null;
   const deposit = round2(totals.totalPrice * (depositValue / 100));
 
   return (
@@ -518,16 +524,6 @@ export function EstimateBuilder({
                       placeholder="e.g. 850"
                       value={area}
                       onChange={(event) => setArea(event.target.value)}
-                    />
-                  </Field>
-                  <Field label="Sales tax %">
-                    <Input
-                      type="number"
-                      min={0}
-                      max={20}
-                      step={0.01}
-                      value={taxRate}
-                      onChange={(event) => setTaxRate(event.target.value)}
                     />
                   </Field>
                   <Field label="Waste %">
@@ -1050,6 +1046,23 @@ export function EstimateBuilder({
                     </>
                   ) : null}
                 </div>
+                {commissionPercent !== null && totals.subtotalPrice > 0 ? (
+                  <div className="send-note" role="note" style={{ marginTop: 8 }}>
+                    {commissionPercent > 0 ? (
+                      <>
+                        At {pct(discountPercentGiven)} off, your commission is{" "}
+                        <strong>{commissionPercent}%</strong> (about{" "}
+                        <strong>{money2((totals.netPrice * commissionPercent) / 100)}</strong>) on this
+                        package.
+                      </>
+                    ) : (
+                      <>
+                        At {pct(discountPercentGiven)} off, this discount needs owner approval and pays
+                        no commission.
+                      </>
+                    )}
+                  </div>
+                ) : null}
               </div>
 
               <div className="pkg-sum">
@@ -1068,10 +1081,6 @@ export function EstimateBuilder({
                     <span>-{money2(totals.discountAmount)}</span>
                   </div>
                 ) : null}
-                <div>
-                  <span>Sales tax ({taxValue}% on taxable items)</span>
-                  <span>{money2(totals.taxAmount)}</span>
-                </div>
                 <div className="grand">
                   <span>{tierName(activeTier)} total</span>
                   <span>{money2(totals.totalPrice)}</span>
