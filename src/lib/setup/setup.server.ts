@@ -21,13 +21,13 @@ import type { SetupCredential, SetupGhlUser } from "./types";
    setup.server.ts  -  first-run setup: GHL sub-account users -> app users
    --------------------------------------------------------------------------
    1. verify   the PIT token + Location ID against GHL, list the sub-account's
-               users (agency users are left out).
+                users (agency users are left out).
    2. complete re-verifies, backs up the current users to /backups, then in
-               one transaction replaces every app user with the selected GHL
-               users, each with the chosen app role and a temporary password.
+                one transaction replaces every app user with the selected GHL
+                users, each with the chosen app role and a temporary password.
 
-   Guarded by SETUP_KEY (from .env) and usable exactly once: after it
-   succeeds, `setupCompletedAt` is stamped and every setup route refuses.
+    Guarded by SETUP_KEY (from .env) and usable exactly once: after it
+    succeeds, `setupCompletedAt` is stamped and every setup route refuses.
    ========================================================================== */
 
 export class SetupError extends Error {
@@ -189,12 +189,16 @@ export interface CreatedCredential {
   temporaryPassword: string;
 }
 
-/** Writes every current user (and their roles) to backups/ before they are deleted. */
+/** Writes every current user (and their roles) to a writable temp directory before delete. */
 async function backupUsers(): Promise<string | null> {
   const users = await prisma.user.findMany({ include: { roles: { include: { role: true } } } });
   if (users.length === 0) return null;
-  const dir = path.join(process.cwd(), "backups");
+
+  // Vercel/serverless runtimes do not allow writing into the app bundle directory.
+  // Use /tmp instead of /var/task so the backup can be created at runtime.
+  const dir = path.join("/tmp", "backups");
   await mkdir(dir, { recursive: true });
+
   const file = path.join(dir, `users-before-setup-${new Date().toISOString().replace(/[:.]/g, "-")}.json`);
   await writeFile(file, JSON.stringify({ exportedAt: new Date().toISOString(), users }, null, 2), "utf8");
   return file;
