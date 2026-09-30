@@ -50,14 +50,14 @@ import type {
              rep who owns the customer in GHL (else the admin).
      rep     their own estimates, for customers they can see in GHL
              (same rule as the Sales Pipeline).
-   Cost never reaches a rep's browser, and a rep's save cannot change it:
-   catalog lines take the price-book cost, custom lines cost nothing.
+    Cost never reaches a rep's browser, and a rep's save cannot change it:
+    catalog lines take the price-book cost, custom lines cost nothing.
 
-   GHL sync (best effort - the estimate is saved even if GHL refuses):
-     send   opportunity value = the Better total (else the largest), stage
-            moves to "Estimate Sent" when the pipeline has one
-     sign   opportunity value = the accepted package total, status won
-   ========================================================================== */
+    GHL sync (best effort - the estimate is saved even if GHL refuses):
+      send   opportunity value = the Better total (else the largest), stage
+             moves to "Estimate Sent" when the pipeline has one
+      sign   opportunity value = the accepted package total, status won
+    ========================================================================== */
 
 export class EstimateError extends Error {
   constructor(
@@ -180,7 +180,7 @@ export function toUiEstimate(row: EstimateRow, includeCost: boolean): Estimate {
       phone: row.lead.phone ?? "",
     },
     webViewUrl: row.publicToken
-      ? `${(process.env.APP_URL ?? "http://localhost:3000").replace(/\/$/, "")}/estimate/${row.publicToken}`
+      ? `${(process.env.APP_URL ?? "https://j-j-floring-world.vercel.app").replace(/\/$/, "")}/estimate/${row.publicToken}`
       : null,
     documentUrl: row.documentUrl ?? null,
   };
