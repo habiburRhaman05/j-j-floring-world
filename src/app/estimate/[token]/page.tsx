@@ -210,16 +210,7 @@ export default async function PublicEstimatePage(props: {
                   Review &amp; sign document
                 </a>
               ) : null}
-              {docsLink ? (
-                <a
-                  href={docsLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn btn-secondary btn-lg pe-approve-btn"
-                >
-                  Approve estimate
-                </a>
-              ) : null}
+          
             </div>
           )}
         </div>
