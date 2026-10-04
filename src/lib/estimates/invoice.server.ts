@@ -87,6 +87,10 @@ export interface GhlInvoiceResponse {
   amountDue?: number;
   name?: string;
   invoiceNumber?: string;
+  issueDate?: string;
+  dueDate?: string;
+  createdAt?: string;
+  contactDetails?: { id?: string; name?: string; email?: string };
 }
 
 // ── GHL Invoice API calls (Version: v3) ──────────────────────────────────
@@ -154,10 +158,23 @@ async function sendGhlInvoice(connection: GhlConnection, invoiceId: string, data
 }
 
 export async function listGhlInvoices(connection: GhlConnection, locationId: string, contactId?: string): Promise<GhlInvoiceResponse[]> {
-  const params = new URLSearchParams({ altId: locationId, altType: "location", limit: "100" });
-  if (contactId) params.set("contactId", contactId);
-  const raw = await ghlInvoiceFetch<Record<string, unknown>>(connection, `/invoices/?${params}`);
-  return extractInvoiceList(raw);
+  // Walk the pages so a location with more than 100 invoices is not cut off.
+  const PAGE = 100;
+  const out: GhlInvoiceResponse[] = [];
+  for (let page = 0; page < 10; page++) {
+    const params = new URLSearchParams({
+      altId: locationId,
+      altType: "location",
+      limit: String(PAGE),
+      offset: String(page * PAGE),
+    });
+    if (contactId) params.set("contactId", contactId);
+    const raw = await ghlInvoiceFetch<Record<string, unknown>>(connection, `/invoices/?${params}`);
+    const batch = extractInvoiceList(raw);
+    out.push(...batch);
+    if (batch.length < PAGE) break;
+  }
+  return out;
 }
 
 async function deleteGhlInvoice(connection: GhlConnection, invoiceId: string, locationId: string) {

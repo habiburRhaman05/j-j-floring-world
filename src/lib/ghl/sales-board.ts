@@ -171,6 +171,7 @@ export async function fetchSalesBoard(connection: GhlConnection, viewer: Viewer)
       closedAt: status === "open" ? null : (o.lastStatusChangeAt ?? o.updatedAt ?? null),
       source: o.source ?? null,
       discountPercent: discountByOpportunity.get(o.id) ?? 0,
+      estimateApproved: discountByOpportunity.has(o.id),
       assignedToGhlId: ownerGhlId,
       ...ownerOf(ownerGhlId),
     };

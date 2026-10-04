@@ -161,6 +161,8 @@ export function computeMetrics(
   };
   let daysTotal = 0;
   let daysCount = 0;
+  /** Won deals with a customer-approved estimate: the only ones that earn the appointment fee. */
+  let approvedWon = 0;
 
   for (const o of opportunities) {
     const createdInRange = inRange(o.createdAt, range);
@@ -176,6 +178,7 @@ export function computeMetrics(
       m.wonCount += 1;
       m.wonValue += o.value;
       m.commission += o.value * (lookupCommissionRate(o.discountPercent, rates.commissionTiers) / 100);
+      if (o.estimateApproved) approvedWon += 1;
       if (o.createdAt && o.closedAt) {
         const days = (new Date(o.closedAt).getTime() - new Date(o.createdAt).getTime()) / DAY_MS;
         if (days >= 0) {
@@ -197,7 +200,7 @@ export function computeMetrics(
   m.wonValue = round2(m.wonValue);
   m.lostValue = round2(m.lostValue);
   m.commission = round2(m.commission);
-  m.appointmentFees = round2(m.wonCount * (rates.appointmentFee ?? 0));
+  m.appointmentFees = round2(approvedWon * (rates.appointmentFee ?? 0));
   m.totalRepPay = round2(m.commission + m.appointmentFees);
   if (m.estMargin !== null && rates.marginPercent !== null) {
     m.estMargin = round2(m.wonValue * (rates.marginPercent / 100));

@@ -54,14 +54,48 @@ export async function listInvoices(connection: GhlConnection, viewer: Viewer): P
   });
 
   let live = new Map<string, GhlInvoiceResponse>();
+  let ghlList: GhlInvoiceResponse[] | null = null;
   let notice: string | null = null;
-  if (rows.length) {
+  // An admin always asks GHL (to see invoices made outside the app); a rep only when they have their own.
+  if (viewer.isAdmin || rows.length) {
     try {
-      const list = await listGhlInvoices(connection, connection.locationId);
-      live = new Map(list.map((inv) => [inv._id, inv] as const));
-    } catch {
+      ghlList = await listGhlInvoices(connection, connection.locationId);
+      live = new Map(ghlList.map((inv) => [inv._id, inv] as const));
+    } catch (error) {
+      console.error("[invoices] GHL list failed:", error);
       notice = "GoHighLevel could not be reached, so these are the last saved statuses.";
     }
+  }
+
+  // Admin: every GHL invoice, with our saved details attached where we created it.
+  if (viewer.isAdmin && ghlList) {
+    const saved = new Map(rows.map((r) => [r.ghlInvoiceId, r] as const));
+    const invoices: InvoiceListItem[] = ghlList.map((g) => {
+      const r = saved.get(g._id);
+      const total = Number(g.total ?? r?.total ?? 0);
+      const amountPaid = Number(g.amountPaid ?? r?.amountPaid ?? 0);
+      const amountDue = Number(g.amountDue ?? r?.amountDue ?? 0);
+      const due = g.dueDate ? new Date(g.dueDate) : (r?.dueAt ?? null);
+      const issued = g.issueDate ?? g.createdAt ?? null;
+      return {
+        id: r?.id ?? g._id,
+        number: g.invoiceNumber ?? r?.number ?? g.name ?? g._id,
+        customerName: r
+          ? `${r.lead.firstName} ${r.lead.lastName}`.trim()
+          : (g.contactDetails?.name ?? "-"),
+        repName: r?.estimate?.rep ? `${r.estimate.rep.firstName} ${r.estimate.rep.lastName}`.trim() : null,
+        estimateNumber: r?.estimate?.number ?? null,
+        status: ghlStatus(g.status, due && !Number.isNaN(due.getTime()) ? due : null, amountDue) ?? (r ? LOCAL_STATUS[r.status] : "Sent"),
+        total,
+        amountPaid,
+        amountDue,
+        issuedAt: issued ? new Date(issued).toISOString() : (r?.issuedAt ?? r?.createdAt)?.toISOString() ?? null,
+        dueAt: due && !Number.isNaN(due.getTime()) ? due.toISOString() : null,
+        url: r?.ghlInvoiceUrl ?? null,
+      };
+    });
+    invoices.sort((a, b) => (b.issuedAt ?? "").localeCompare(a.issuedAt ?? ""));
+    return { scope: "all", invoices, notice };
   }
 
   const invoices: InvoiceListItem[] = rows.map((r) => {

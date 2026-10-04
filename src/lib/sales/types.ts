@@ -20,6 +20,8 @@ export interface SalesOpportunity extends CsrBoardOpportunity {
   source: string | null;
   /** Discount % on the signed estimate for this deal; 0 when none is on file. */
   discountPercent: number;
+  /** True once the customer has signed an estimate for this deal. The appointment fee is only earned then. */
+  estimateApproved: boolean;
 }
 
 export interface SalesRep {
@@ -50,7 +52,7 @@ export interface CommissionTier {
  * percent of won revenue that depends only on the discount given.
  *
  * `commissionTiers` maps a discount-percentage bracket to a commission rate.
- * `appointmentFee` is a flat dollar amount added to every rep's pay per closed deal.
+ * `appointmentFee` is a flat dollar amount added to a rep's pay for each deal whose estimate the customer approved.
  */
 export interface SalesRates {
   /** Company-average gross margin on won revenue. Admin only; null for reps. */

@@ -217,7 +217,9 @@ export function SalesDashboard({ scope }: { scope: "all" | "own" }) {
         <Stat
           label="Appointment fees"
           value={money(totals.appointmentFees)}
-          note={`$${data.rates.appointmentFee ?? 75} x ${totals.wonCount} won`}
+          note={`$${data.rates.appointmentFee ?? 75} per approved estimate (${
+            data.rates.appointmentFee ? Math.round(totals.appointmentFees / data.rates.appointmentFee) : 0
+          } approved)`}
         />
         <Stat
           label={isAdmin ? "Total rep pay" : "My total pay"}
