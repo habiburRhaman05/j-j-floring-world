@@ -217,8 +217,9 @@ export interface OwnerRow {
 }
 
 /**
- * One row per owner: every rep (even with nothing yet), plus any other owner
- * that holds cards (a GHL user not in the app, or "Unassigned").
+ * One row per sales rep (even with nothing yet). Cards held by an admin, a GHL
+ * user who is not a rep, or nobody ("Unassigned") are not reps, so they get no
+ * row; they still count in the overall totals.
  */
 export function metricsByOwner(
   opportunities: readonly SalesOpportunity[],
@@ -229,10 +230,8 @@ export function metricsByOwner(
   const groups = new Map<string, { ownerUserId: string | null; ownerName: string; items: SalesOpportunity[] }>();
   for (const rep of reps) groups.set(`u:${rep.userId}`, { ownerUserId: rep.userId, ownerName: rep.name, items: [] });
   for (const o of opportunities) {
-    const key = o.ownerUserId ? `u:${o.ownerUserId}` : `n:${o.ownerName}`;
-    const group = groups.get(key) ?? { ownerUserId: o.ownerUserId, ownerName: o.ownerName, items: [] };
-    group.items.push(o);
-    groups.set(key, group);
+    const group = o.ownerUserId ? groups.get(`u:${o.ownerUserId}`) : undefined;
+    if (group) group.items.push(o);
   }
   return [...groups.values()]
     .map((g) => ({
