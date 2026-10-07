@@ -1,144 +1,114 @@
 "use client";
 
-import { useState } from "react";
-import { InvoiceDialog } from "@/components/invoice/invoice-dialog";
-import { BarChart } from "@/components/ui/bar-chart";
-import { Button } from "@/components/ui/button";
-import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { useMemo } from "react";
+import { BarChart, type ChartRow } from "@/components/ui/bar-chart";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Panel, PanelBody, PanelHead } from "@/components/ui/panel";
-import { Pill, StagePill } from "@/components/ui/pill";
+import { Pill } from "@/components/ui/pill";
 import { Stat, StatStrip } from "@/components/ui/stat";
-import { amountOwed, companyTotals, jobPipelineCounts, repStats, salesFunnel } from "@/lib/data/selectors";
-import { money, money2, pct } from "@/lib/format";
-import { useCommissionTiers } from "@/lib/sales/hooks";
-import type { Database, Invoice, RepStats, Role } from "@/lib/types";
-// The overview is Admin-only, so the Role prop is simply "Admin" at the route.
+import { Table, TableWrap, TBody, Td, Th, THead, Tr } from "@/components/ui/table";
+import { toApiError } from "@/lib/api/errors";
+import { money, money2, pct, relative } from "@/lib/format";
+import { useInvoices } from "@/lib/invoices/hooks";
+import type { InvoiceDisplayStatus } from "@/lib/invoices/types";
+import { useSalesBoard } from "@/lib/sales/hooks";
+import { computeMetrics, metricsByOwner, presetRange } from "@/lib/sales/metrics";
 
-export function AdminOverview({ db, role }: { db: Database; role: Role }) {
-  const totals = companyTotals(db);
+/* ==========================================================================
+   overview.tsx  -  the admin company dashboard
+   --------------------------------------------------------------------------
+   Everything here is read live from GoHighLevel: the Sales Pipeline for deals
+   and revenue, and GHL invoices for what has been collected and what is still
+   owed. (It used to read the app's own jobs/invoices tables, which stay empty
+   because the work is run in GHL.)
+   ========================================================================== */
 
-  const tiers = useCommissionTiers().data?.commissionTiers;
-  const reps = db.users
-    .filter((u) => u.role === "Sales Rep")
-    .map((u) => repStats(db, u.id, tiers))
-    .sort((a, b) => b.revenue - a.revenue);
+const INVOICE_TONE: Record<InvoiceDisplayStatus, string> = {
+  Draft: "pill-outline",
+  Sent: "pill-oak",
+  "Partially paid": "pill-brass",
+  Paid: "pill-moss",
+  Overdue: "pill-clay",
+  Void: "pill-slate",
+};
 
-  const openInvoices = db.invoices.filter((i) => i.paymentStatus !== "Paid");
-  const [openInvoiceId, setOpenInvoiceId] = useState<string | null>(null);
-  const openInvoice = openInvoiceId
-    ? (db.invoices.find((i) => i.id === openInvoiceId) ?? null)
-    : null;
+const INVOICE_STATUSES: InvoiceDisplayStatus[] = ["Draft", "Sent", "Partially paid", "Overdue", "Paid", "Void"];
 
-  const leaderboardColumns: DataTableColumn<RepStats>[] = [
-    {
-      id: "rep",
-      header: "Rep",
-      cell: ({ row }) => (
-        <div className="row">
-          <Pill tone="pill-oak">#{reps.findIndex((r) => r.repId === row.original.repId) + 1}</Pill>
-          <span style={{ fontWeight: 600 }}>{row.original.name}</span>
-        </div>
-      ),
-    },
-    { accessorKey: "dealsWon", header: "Won", meta: { numeric: true } },
-    { accessorKey: "openLeads", header: "Open", meta: { numeric: true } },
-    {
-      id: "closeRate",
-      header: "Close rate",
-      meta: { numeric: true },
-      cell: ({ row }) => pct(row.original.closeRate),
-    },
-    {
-      id: "revenue",
-      header: "Revenue",
-      meta: { numeric: true },
-      cell: ({ row }) => money(row.original.revenue),
-    },
-    {
-      id: "rate",
-      header: "Rate",
-      meta: { numeric: true },
-      cell: ({ row }) => pct(row.original.commissionRate * 100),
-    },
-    {
-      id: "commission",
-      header: "Commission",
-      meta: { numeric: true },
-      cell: ({ row }) => (
-        <span style={{ fontWeight: 600, color: "var(--moss)" }}>
-          {money2(row.original.commission)}
-        </span>
-      ),
-    },
-  ];
+export function AdminOverview() {
+  const board = useSalesBoard();
+  const invoiceQuery = useInvoices();
+  const data = board.data;
+  const invoices = invoiceQuery.data?.invoices;
 
-  const outstandingColumns: DataTableColumn<Invoice>[] = [
-    {
-      id: "customer",
-      header: "Customer",
-      cell: ({ row }) => {
-        const lead = db.leads.find((l) => l.id === row.original.leadId);
-        return lead ? lead.name : row.original.leadId;
-      },
-    },
-    {
-      id: "status",
-      header: "Status",
-      cell: ({ row }) => <StagePill stage={row.original.paymentStatus} />,
-    },
-    {
-      id: "contract",
-      header: "Contract",
-      meta: { numeric: true },
-      cell: ({ row }) => money2(row.original.totalPrice),
-    },
-    {
-      id: "deposit",
-      header: "Deposit",
-      meta: { numeric: true, className: "muted" },
-      cell: ({ row }) => money2(row.original.depositAmount),
-    },
-    {
-      id: "owed",
-      header: "Owed",
-      meta: { numeric: true },
-      cell: ({ row }) => (
-        <span style={{ fontWeight: 600 }}>{money2(amountOwed(row.original))}</span>
-      ),
-    },
-    {
-      id: "action",
-      header: "",
-      cell: ({ row }) => (
-        <Button size="sm" onClick={() => setOpenInvoiceId(row.original.id)}>
-          Open invoice
-        </Button>
-      ),
-    },
-  ];
+  const all = useMemo(() => presetRange("all"), []);
+  const totals = useMemo(() => (data ? computeMetrics(data.opportunities, all, data.rates) : null), [data, all]);
+  const owners = useMemo(
+    () => (data ? metricsByOwner(data.opportunities, data.reps, all, data.rates) : []),
+    [data, all],
+  );
+
+  const funnel = useMemo<ChartRow[]>(() => {
+    if (!data) return [];
+    const counts = new Map<string, number>();
+    for (const o of data.opportunities) counts.set(o.stageId, (counts.get(o.stageId) ?? 0) + 1);
+    return data.pipeline.stages.map((s) => ({ label: s.name, count: counts.get(s.id) ?? 0 }));
+  }, [data]);
+
+  const invoiceRows = useMemo<ChartRow[]>(
+    () =>
+      INVOICE_STATUSES.map((status) => ({
+        label: status,
+        count: (invoices ?? []).filter((i) => i.status === status).length,
+        tone: status === "Paid" ? "won" : status === "Overdue" ? "lost" : undefined,
+      })),
+    [invoices],
+  );
+
+  if (board.isPending) {
+    return <div className="skel" style={{ height: 120 }} />;
+  }
+  if (board.error || !data || !totals) {
+    return (
+      <div className="login-alert" role="alert">
+        <span>{toApiError(board.error).displayMessage}</span>
+      </div>
+    );
+  }
+
+  // Void and draft invoices were never owed; everything else counts.
+  const billed = (invoices ?? []).filter((i) => i.status !== "Void" && i.status !== "Draft");
+  const collected = billed.reduce((sum, i) => sum + i.amountPaid, 0);
+  const outstanding = billed.reduce((sum, i) => sum + i.amountDue, 0);
+  const owed = billed.filter((i) => i.amountDue > 0).sort((a, b) => b.amountDue - a.amountDue);
+
+  const showMargin = data.rates.marginPercent !== null && totals.estMargin !== null;
+  const cost = showMargin ? totals.wonValue - (totals.estMargin ?? 0) : null;
 
   return (
     <>
       <StatStrip>
+        <Stat label="Contracted revenue" value={money(totals.wonValue)} note={`${totals.wonCount} won deals`} />
         <Stat
-          label="Contracted revenue"
-          value={money(totals.revenue)}
-          note={`${totals.jobCount} jobs on the books`}
+          label="Cost of goods"
+          value={cost === null ? "-" : money(cost)}
+          note={cost === null ? "Set the margin in Sales Pipeline" : "Estimated from the average margin"}
         />
-        <Stat label="Cost of goods" value={money(totals.cost)} note="Materials and labour" />
         <Stat
           label="Gross margin"
-          value={money(totals.margin)}
-          note={`${pct(totals.marginPct)} of revenue`}
+          value={totals.estMargin === null ? "-" : money(totals.estMargin)}
+          note={data.rates.marginPercent === null ? "Not set" : `${pct(data.rates.marginPercent)} of revenue`}
           tone="good"
         />
-        <Stat label="Collected" value={money(totals.collected)} note="Deposits plus paid balances" />
+        <Stat
+          label="Collected"
+          value={invoices ? money(collected) : "..."}
+          note="Paid on GoHighLevel invoices"
+        />
         <Stat
           label="Outstanding"
-          value={money(totals.outstanding)}
+          value={invoices ? money(outstanding) : "..."}
           note="Balances still owed"
-          tone={totals.outstanding > 0 ? "warn" : ""}
+          tone={outstanding > 0 ? "warn" : ""}
         />
       </StatStrip>
 
@@ -146,20 +116,20 @@ export function AdminOverview({ db, role }: { db: Database; role: Role }) {
         <Panel>
           <PanelHead>
             <h3>Sales funnel</h3>
-            <span className="t-meta">{db.leads.length} leads</span>
+            <span className="t-meta">{data.opportunities.length} deals</span>
           </PanelHead>
           <PanelBody>
-            <BarChart rows={salesFunnel(db)} unit="leads" />
+            <BarChart rows={funnel} unit="deals" />
           </PanelBody>
         </Panel>
 
         <Panel>
           <PanelHead>
-            <h3>Job pipeline</h3>
-            <span className="t-meta">{db.jobs.length} jobs</span>
+            <h3>Invoices by status</h3>
+            <span className="t-meta">{invoices ? `${invoices.length} invoices` : ""}</span>
           </PanelHead>
           <PanelBody>
-            <BarChart rows={jobPipelineCounts(db)} unit="jobs" />
+            <BarChart rows={invoiceRows} unit="invoices" />
           </PanelBody>
         </Panel>
       </div>
@@ -167,38 +137,115 @@ export function AdminOverview({ db, role }: { db: Database; role: Role }) {
       <Panel className="section" style={{ marginTop: 16 }}>
         <PanelHead>
           <h3>Sales rep leaderboard</h3>
-          <span className="t-meta">Commission owed is revenue times rate</span>
+          <span className="t-meta">Commission follows the discount given; appointment fee is paid on approved estimates</span>
         </PanelHead>
-        <DataTable columns={leaderboardColumns} data={reps} />
+        {owners.length ? (
+          <TableWrap>
+            <Table>
+              <THead>
+                <Tr>
+                  <Th>Rep</Th>
+                  <Th numeric>Won</Th>
+                  <Th numeric>Open</Th>
+                  <Th numeric>Win rate</Th>
+                  <Th numeric>Revenue</Th>
+                  <Th numeric>Rate</Th>
+                  <Th numeric>Commission</Th>
+                  <Th numeric>Appt fees</Th>
+                  <Th numeric>Total pay</Th>
+                </Tr>
+              </THead>
+              <TBody>
+                {owners.map((row, index) => (
+                  <Tr key={row.ownerUserId ?? row.ownerName}>
+                    <Td>
+                      <div className="row">
+                        <Pill tone="pill-oak">#{index + 1}</Pill>
+                        <span style={{ fontWeight: 600 }}>{row.ownerName}</span>
+                      </div>
+                    </Td>
+                    <Td numeric>{row.metrics.wonCount}</Td>
+                    <Td numeric>{row.metrics.openCount}</Td>
+                    <Td numeric>{row.metrics.winRate === null ? "-" : pct(row.metrics.winRate)}</Td>
+                    <Td numeric>{money(row.metrics.wonValue)}</Td>
+                    <Td numeric>{pct(row.commissionPercent)}</Td>
+                    <Td numeric>{money2(row.metrics.commission)}</Td>
+                    <Td numeric>{money2(row.metrics.appointmentFees)}</Td>
+                    <Td numeric>
+                      <span style={{ fontWeight: 600, color: "var(--moss)" }}>{money2(row.metrics.totalRepPay)}</span>
+                    </Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
+          </TableWrap>
+        ) : (
+          <PanelBody>
+            <EmptyState title="No sales reps yet" message="Add a sales representative in Team." />
+          </PanelBody>
+        )}
       </Panel>
 
       <Panel className="section">
         <PanelHead>
           <h3>Outstanding balances</h3>
-          <Pill tone={totals.outstanding ? "pill-clay" : "pill-moss"}>
-            {money(totals.outstanding)}
-          </Pill>
+          <Pill tone={outstanding ? "pill-clay" : "pill-moss"}>{money(outstanding)}</Pill>
         </PanelHead>
-        {openInvoices.length ? (
-          <DataTable columns={outstandingColumns} data={openInvoices} />
+        {invoiceQuery.isPending ? (
+          <PanelBody>
+            <div className="t-meta">Loading invoices...</div>
+          </PanelBody>
+        ) : invoiceQuery.error ? (
+          <PanelBody>
+            <div className="t-meta">{toApiError(invoiceQuery.error).displayMessage}</div>
+          </PanelBody>
+        ) : owed.length ? (
+          <TableWrap>
+            <Table>
+              <THead>
+                <Tr>
+                  <Th>Invoice</Th>
+                  <Th>Customer</Th>
+                  <Th>Status</Th>
+                  <Th numeric>Total</Th>
+                  <Th numeric>Paid</Th>
+                  <Th numeric>Owed</Th>
+                  <Th>Issued</Th>
+                </Tr>
+              </THead>
+              <TBody>
+                {owed.map((inv) => (
+                  <Tr key={inv.id}>
+                    <Td>
+                      {inv.url ? (
+                        <a href={inv.url} target="_blank" rel="noopener noreferrer">
+                          {inv.number}
+                        </a>
+                      ) : (
+                        inv.number
+                      )}
+                    </Td>
+                    <Td>{inv.customerName}</Td>
+                    <Td>
+                      <Pill className={INVOICE_TONE[inv.status]}>{inv.status}</Pill>
+                    </Td>
+                    <Td numeric>{money2(inv.total)}</Td>
+                    <Td numeric>{money2(inv.amountPaid)}</Td>
+                    <Td numeric>
+                      <span style={{ fontWeight: 600 }}>{money2(inv.amountDue)}</span>
+                    </Td>
+                    <Td>{inv.issuedAt ? relative(inv.issuedAt) : "-"}</Td>
+                  </Tr>
+                ))}
+              </TBody>
+            </Table>
+          </TableWrap>
         ) : (
           <PanelBody>
-            <EmptyState title="All settled" message="Every invoice on the books is paid in full." />
+            <EmptyState title="All settled" message="Every invoice in GoHighLevel is paid in full." />
           </PanelBody>
         )}
       </Panel>
-
-      {openInvoice ? (
-        <InvoiceDialog
-          open
-          onOpenChange={(next) => {
-            if (!next) setOpenInvoiceId(null);
-          }}
-          invoice={openInvoice}
-          db={db}
-          role={role}
-        />
-      ) : null}
     </>
   );
 }
